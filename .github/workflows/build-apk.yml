@@ -33,123 +33,114 @@ jobs:
           distribution: 'temurin'
           java-version: '11'
       
-      - name: Build APK with React Native Web
-        run: |
-          # Create a simple Android wrapper for the web app
-          mkdir -p android-wrapper
-          cd android-wrapper
-          
-          # Create basic Android project structure
-          mkdir -p app/src/main/assets/www
-          mkdir -p app/src/main/java/com/mbook/app
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/drawable
-          
-          # Copy built web app
-          cp -r ../dist/* app/src/main/assets/www/
-          
-          echo "✅ APK wrapper created successfully"
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: 31
+          ndk-version: 25.1.8937393
       
-      - name: Create Release APK
+      - name: Install Cordova
+        run: npm install -g cordova@latest
+      
+      - name: Create Cordova Project
         run: |
-          # Install Cordova CLI
-          npm install -g cordova
-          
-          # Create Cordova project
-          cordova create mbook-app com.mbook.app Mbook
-          cd mbook-app
-          
-          # Add Android platform
+          cd /tmp
+          cordova create mbook-cordova com.mbook.app Mbook
+          cd mbook-cordova
           cordova platform add android@latest
+          echo "✅ Cordova project created"
+      
+      - name: Copy Web App to Cordova
+        run: |
+          rm -rf /tmp/mbook-cordova/www/*
+          cp -r $GITHUB_WORKSPACE/dist/* /tmp/mbook-cordova/www/
+          echo "✅ Web app copied to Cordova project"
+      
+      - name: Build APK
+        run: |
+          cd /tmp/mbook-cordova
+          cordova build android --release 2>&1 | tee build.log
           
-          # Build APK
-          cordova build android --release 2>&1 || true
+          # Check for APK files
+          echo "Searching for APK files..."
+          find . -name "*.apk" -type f 2>/dev/null | head -10
           
-          # Check for APK
-          if [ -f "platforms/android/app/build/outputs/apk/release/app-release.apk" ]; then
-            cp platforms/android/app/build/outputs/apk/release/app-release.apk ../mbook-app.apk
-            echo "APK_STATUS=SUCCESS" >> $GITHUB_ENV
-            echo "✅ APK built successfully!"
-          elif [ -f "platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
-            cp platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk ../mbook-app.apk
-            echo "APK_STATUS=SUCCESS" >> $GITHUB_ENV
-            echo "✅ Unsigned APK built successfully!"
+          # Try to find and copy the APK
+          if [ -f "platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
+            cp "platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk" "$GITHUB_WORKSPACE/mbook-app.apk"
+            echo "APK_FOUND=true" >> $GITHUB_ENV
+            echo "✅ APK found and copied!"
+          elif [ -f "platforms/android/app/build/outputs/apk/debug/app-debug.apk" ]; then
+            cp "platforms/android/app/build/outputs/apk/debug/app-debug.apk" "$GITHUB_WORKSPACE/mbook-app.apk"
+            echo "APK_FOUND=true" >> $GITHUB_ENV
+            echo "✅ Debug APK found and copied!"
           else
-            echo "APK_STATUS=FAILED" >> $GITHUB_ENV
-            echo "⚠️ APK build incomplete - checking alternatives..."
-            find . -name "*.apk" -type f 2>/dev/null | head -5
+            echo "APK_FOUND=false" >> $GITHUB_ENV
+            echo "❌ APK not found"
+            cat build.log
           fi
       
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
-        if: env.APK_STATUS == 'SUCCESS'
+        if: env.APK_FOUND == 'true'
         with:
-          name: mbook-apk
+          name: mbook-apk-release
           path: mbook-app.apk
-          if-no-files-found: ignore
       
-      - name: Create Release
-        uses: actions/create-release@v1
-        if: env.APK_STATUS == 'SUCCESS'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        id: create_release
+      - name: Create GitHub Release
+        if: env.APK_FOUND == 'true'
+        uses: softprops/action-gh-release@v1
         with:
           tag_name: v1.0.${{ github.run_number }}
-          release_name: Mbook v1.0.${{ github.run_number }}
+          name: Mbook v1.0.${{ github.run_number }}
           body: |
-            # 🎉 Mbook v1.0.${{ github.run_number }} - Ready to Install!
+            # 🎉 Mbook v1.0.${{ github.run_number }} - Ready for Your Phone!
             
-            ✅ **APK is ready for your Android phone!**
+            ✅ **Your Mbook APK is ready to install on your Android phone!**
             
             ## 📥 Installation Steps:
             
             1. **Download** the `mbook-app.apk` file from the assets below
-            2. **Transfer** to your Android phone (via USB or cloud)
-            3. **Enable Installation** from Unknown Sources:
-               - Go to Settings → Security → Unknown Sources (enable)
+            2. **Transfer** to your Android phone (USB cable or cloud storage)
+            3. **Enable Installation from Unknown Sources:**
+               - Go to Settings → Security → Unknown Sources (toggle ON)
             4. **Install** by opening the APK file in your file manager
-            5. **Launch** the Mbook app!
+            5. **Launch** the Mbook app and start tracking!
             
             ## ✨ Features:
-            - 📊 Work tracking dashboard
-            - 💰 Payment management (Paid/Unpaid/Undecided)
-            - 📱 QR code display and upload
-            - 📈 Analytics & income reports
+            - 📊 Work entry tracking dashboard
+            - 💰 Payment status management (Paid/Unpaid/Undecided)
+            - 📱 QR code upload and display
+            - 📈 Income analytics & reports
             - 💾 Local data storage (all data stays on your phone)
-            - 🌙 Dark theme
+            - 🌙 Dark theme with amber accents
             - ⚡ Fast & lightweight
+            - 🔒 No cloud sync - complete privacy
             
             ## 🔒 Privacy & Security:
-            - No cloud sync - your data is yours alone
-            - Works completely offline
-            - No ads or tracking
+            - ✅ No cloud synchronization
+            - ✅ Works completely offline
+            - ✅ No ads or tracking
+            - ✅ All data stored locally on your device
             
-            **Enjoy using Mbook!** 🚀
+            ## 🚀 How to Update:
+            Every time code is pushed to the main branch, a new APK is automatically built and released here!
+            
+            **Enjoy using Mbook!** 🎉
+          files: mbook-app.apk
           draft: false
           prerelease: false
-      
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        if: env.APK_STATUS == 'SUCCESS'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: mbook-app.apk
-          asset_name: mbook-v1.0.${{ github.run_number }}.apk
-          asset_content_type: application/vnd.android.package-archive
       
-      - name: Build Status Summary
+      - name: Build Status
         run: |
           echo "========================================="
-          echo "Build Status: ${{ env.APK_STATUS }}"
-          echo "========================================="
-          if [ "${{ env.APK_STATUS }}" == "SUCCESS" ]; then
-            echo "✅ APK is ready for download!"
-            echo "📍 Check Releases section for the APK file"
+          if [ "${{ env.APK_FOUND }}" == "true" ]; then
+            echo "✅ SUCCESS: APK built and released!"
+            echo "📍 Download from: Releases section"
           else
-            echo "⚠️ Build encountered issues"
-            echo "📍 Check logs for details"
+            echo "❌ FAILED: APK build did not complete"
+            echo "📍 Check logs above for details"
           fi
+          echo "========================================="
