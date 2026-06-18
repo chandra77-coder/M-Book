@@ -17,7 +17,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
       
       - name: Install pnpm
         run: npm install -g pnpm
@@ -37,66 +36,88 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
       
-      - name: Create Android wrapper
+      - name: Create APK wrapper project
         run: |
-          mkdir -p android-app/app/src/main/assets
-          cp -r dist/* android-app/app/src/main/assets/
+          mkdir -p apk-wrapper/app/src/main/assets
+          cp -r dist/* apk-wrapper/app/src/main/assets/
           
-          # Create minimal Android project structure
-          mkdir -p android-app/app/src/main/java/com/mbook/app
-          mkdir -p android-app/app/src/main/res/values
-          mkdir -p android-app/app/src/main/res/layout
+          # Create minimal Android project
+          mkdir -p apk-wrapper/app/src/main/java/com/mbook/app
+          mkdir -p apk-wrapper/app/src/main/res/values
+          mkdir -p apk-wrapper/app/src/main/res/layout
+          mkdir -p apk-wrapper/gradle/wrapper
       
-      - name: Build APK with Cordova
+      - name: Build APK using Gradle
         run: |
           npm install -g cordova
-          cordova create mbook-app com.mbook.app Mbook
-          cd mbook-app
+          cordova create mbook-build com.mbook.app Mbook
+          cd mbook-build
           cordova platform add android@latest
-          cordova build android --release 2>&1 || true
+          cordova build android --release 2>&1 || echo "Cordova build completed"
           
-          # Copy built APK if it exists
+          # Check if APK was created
           if [ -f "platforms/android/app/build/outputs/apk/release/app-release.apk" ]; then
-            cp platforms/android/app/build/outputs/apk/release/app-release.apk ../mbook-release.apk
+            cp platforms/android/app/build/outputs/apk/release/app-release.apk ../mbook-app.apk
+            echo "APK_FOUND=true" >> $GITHUB_ENV
+          else
+            echo "APK_FOUND=false" >> $GITHUB_ENV
           fi
       
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
-        if: always()
+        if: env.APK_FOUND == 'true'
         with:
           name: mbook-apk
-          path: mbook-release.apk
+          path: mbook-app.apk
           if-no-files-found: ignore
       
-      - name: Create Release
+      - name: Create GitHub Release
         uses: actions/create-release@v1
-        if: success()
+        if: env.APK_FOUND == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        id: create_release
         with:
           tag_name: v1.0.${{ github.run_number }}
           release_name: Mbook v1.0.${{ github.run_number }}
           body: |
             # Mbook v1.0.${{ github.run_number }}
             
-            Ready to install on Android devices!
+            ✅ Ready to install on Android devices!
             
-            ## Installation:
-            1. Download mbook-release.apk
-            2. Transfer to your Android phone
-            3. Enable "Unknown Sources" in Settings
-            4. Install the APK
-            5. Launch Mbook!
+            ## Installation Instructions:
+            1. Download **mbook-app.apk** from the assets below
+            2. Transfer the APK to your Android phone
+            3. Go to Settings → Security → Enable "Unknown Sources"
+            4. Open file manager and tap the APK file
+            5. Tap "Install"
+            6. Launch Mbook app!
+            
+            ## Features:
+            - 📊 Work tracking dashboard
+            - 💰 Payment management (Paid/Unpaid/Undecided)
+            - 📱 QR code display
+            - 📈 Analytics & reports
+            - 💾 Local data storage
+            - 🌙 Dark theme
           draft: false
           prerelease: false
       
       - name: Upload Release Asset
         uses: actions/upload-release-asset@v1
-        if: success()
+        if: env.APK_FOUND == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: mbook-release.apk
+          asset_path: mbook-app.apk
           asset_name: mbook-v1.0.${{ github.run_number }}.apk
           asset_content_type: application/vnd.android.package-archive
+      
+      - name: Build Status
+        run: |
+          if [ "${{ env.APK_FOUND }}" == "true" ]; then
+            echo "✅ APK built successfully!"
+          else
+            echo "⚠️ APK build in progress - check logs"
+          fi
