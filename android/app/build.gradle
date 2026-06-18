@@ -1,0 +1,41 @@
+apply plugin: 'com.android.application'
+
+android {
+    compileSdkVersion 33
+    
+    defaultConfig {
+        applicationId "com.mbook.app"
+        minSdkVersion 21
+        targetSdkVersion 33
+        versionCode 1
+        versionName "1.0.0"
+    }
+    
+    signingConfigs {
+        release {
+            storeFile file("mbook-keystore.jks")
+            storePassword System.getenv("KEYSTORE_PASSWORD") ?: "mbook2024"
+            keyAlias System.getenv("KEY_ALIAS") ?: "mbook"
+            keyPassword System.getenv("KEY_PASSWORD") ?: "mbook2024"
+        }
+    }
+    
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    
+    sourceSets {
+        main {
+            assets.srcDirs = ['src/main/assets']
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+}

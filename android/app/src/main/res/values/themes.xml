@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Mbook" parent="Theme.AppCompat.NoActionBar">
+        <item name="colorPrimary">#FFA500</item>
+        <item name="colorPrimaryDark">#18181b</item>
+        <item name="colorAccent">#FFA500</item>
+        <item name="android:windowBackground">@color/black</item>
+    </style>
+
+    <color name="black">#18181b</color>
+    <color name="white">#FFFFFF</color>
+    <color name="amber">#FFA500</color>
+</resources>

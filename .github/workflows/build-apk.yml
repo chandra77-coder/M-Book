@@ -1,0 +1,76 @@
+name: Build and Release APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Install pnpm
+        run: npm install -g pnpm
+      
+      - name: Install dependencies
+        run: pnpm install
+      
+      - name: Build web app
+        run: pnpm run build
+      
+      - name: Create APK wrapper
+        run: |
+          mkdir -p apk-build
+          cp -r dist apk-build/www
+          cat > apk-build/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Mbook</title>
+            <style>
+              body { margin: 0; padding: 0; }
+              iframe { width: 100vw; height: 100vh; border: none; }
+            </style>
+          </head>
+          <body>
+            <iframe src="www/index.html"></iframe>
+          </body>
+          </html>
+          EOF
+      
+      - name: Generate APK using Cordova
+        run: |
+          npm install -g cordova
+          cd apk-build
+          cordova create mbook com.mbook.app Mbook
+          cd mbook
+          cordova platform add android
+          cordova build android --release
+      
+      - name: Upload APK to Release
+        uses: actions/upload-artifact@v3
+        with:
+          name: mbook-apk
+          path: apk-build/mbook/platforms/android/app/build/outputs/apk/release/app-release.apk
+      
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          release_name: Mbook v1.0.${{ github.run_number }}
+          body: 'Mbook APK - Ready to install on Android devices'
+          draft: false
+          prerelease: false
