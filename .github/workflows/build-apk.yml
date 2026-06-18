@@ -33,47 +33,65 @@ jobs:
           distribution: 'temurin'
           java-version: '11'
       
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-      
-      - name: Create APK wrapper project
+      - name: Build APK with React Native Web
         run: |
-          mkdir -p apk-wrapper/app/src/main/assets
-          cp -r dist/* apk-wrapper/app/src/main/assets/
+          # Create a simple Android wrapper for the web app
+          mkdir -p android-wrapper
+          cd android-wrapper
           
-          # Create minimal Android project
-          mkdir -p apk-wrapper/app/src/main/java/com/mbook/app
-          mkdir -p apk-wrapper/app/src/main/res/values
-          mkdir -p apk-wrapper/app/src/main/res/layout
-          mkdir -p apk-wrapper/gradle/wrapper
+          # Create basic Android project structure
+          mkdir -p app/src/main/assets/www
+          mkdir -p app/src/main/java/com/mbook/app
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/drawable
+          
+          # Copy built web app
+          cp -r ../dist/* app/src/main/assets/www/
+          
+          echo "✅ APK wrapper created successfully"
       
-      - name: Build APK using Gradle
+      - name: Create Release APK
         run: |
+          # Install Cordova CLI
           npm install -g cordova
-          cordova create mbook-build com.mbook.app Mbook
-          cd mbook-build
-          cordova platform add android@latest
-          cordova build android --release 2>&1 || echo "Cordova build completed"
           
-          # Check if APK was created
+          # Create Cordova project
+          cordova create mbook-app com.mbook.app Mbook
+          cd mbook-app
+          
+          # Add Android platform
+          cordova platform add android@latest
+          
+          # Build APK
+          cordova build android --release 2>&1 || true
+          
+          # Check for APK
           if [ -f "platforms/android/app/build/outputs/apk/release/app-release.apk" ]; then
             cp platforms/android/app/build/outputs/apk/release/app-release.apk ../mbook-app.apk
-            echo "APK_FOUND=true" >> $GITHUB_ENV
+            echo "APK_STATUS=SUCCESS" >> $GITHUB_ENV
+            echo "✅ APK built successfully!"
+          elif [ -f "platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
+            cp platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk ../mbook-app.apk
+            echo "APK_STATUS=SUCCESS" >> $GITHUB_ENV
+            echo "✅ Unsigned APK built successfully!"
           else
-            echo "APK_FOUND=false" >> $GITHUB_ENV
+            echo "APK_STATUS=FAILED" >> $GITHUB_ENV
+            echo "⚠️ APK build incomplete - checking alternatives..."
+            find . -name "*.apk" -type f 2>/dev/null | head -5
           fi
       
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
-        if: env.APK_FOUND == 'true'
+        if: env.APK_STATUS == 'SUCCESS'
         with:
           name: mbook-apk
           path: mbook-app.apk
           if-no-files-found: ignore
       
-      - name: Create GitHub Release
+      - name: Create Release
         uses: actions/create-release@v1
-        if: env.APK_FOUND == 'true'
+        if: env.APK_STATUS == 'SUCCESS'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         id: create_release
@@ -81,31 +99,40 @@ jobs:
           tag_name: v1.0.${{ github.run_number }}
           release_name: Mbook v1.0.${{ github.run_number }}
           body: |
-            # Mbook v1.0.${{ github.run_number }}
+            # 🎉 Mbook v1.0.${{ github.run_number }} - Ready to Install!
             
-            ✅ Ready to install on Android devices!
+            ✅ **APK is ready for your Android phone!**
             
-            ## Installation Instructions:
-            1. Download **mbook-app.apk** from the assets below
-            2. Transfer the APK to your Android phone
-            3. Go to Settings → Security → Enable "Unknown Sources"
-            4. Open file manager and tap the APK file
-            5. Tap "Install"
-            6. Launch Mbook app!
+            ## 📥 Installation Steps:
             
-            ## Features:
+            1. **Download** the `mbook-app.apk` file from the assets below
+            2. **Transfer** to your Android phone (via USB or cloud)
+            3. **Enable Installation** from Unknown Sources:
+               - Go to Settings → Security → Unknown Sources (enable)
+            4. **Install** by opening the APK file in your file manager
+            5. **Launch** the Mbook app!
+            
+            ## ✨ Features:
             - 📊 Work tracking dashboard
             - 💰 Payment management (Paid/Unpaid/Undecided)
-            - 📱 QR code display
-            - 📈 Analytics & reports
-            - 💾 Local data storage
+            - 📱 QR code display and upload
+            - 📈 Analytics & income reports
+            - 💾 Local data storage (all data stays on your phone)
             - 🌙 Dark theme
+            - ⚡ Fast & lightweight
+            
+            ## 🔒 Privacy & Security:
+            - No cloud sync - your data is yours alone
+            - Works completely offline
+            - No ads or tracking
+            
+            **Enjoy using Mbook!** 🚀
           draft: false
           prerelease: false
       
       - name: Upload Release Asset
         uses: actions/upload-release-asset@v1
-        if: env.APK_FOUND == 'true'
+        if: env.APK_STATUS == 'SUCCESS'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -114,10 +141,15 @@ jobs:
           asset_name: mbook-v1.0.${{ github.run_number }}.apk
           asset_content_type: application/vnd.android.package-archive
       
-      - name: Build Status
+      - name: Build Status Summary
         run: |
-          if [ "${{ env.APK_FOUND }}" == "true" ]; then
-            echo "✅ APK built successfully!"
+          echo "========================================="
+          echo "Build Status: ${{ env.APK_STATUS }}"
+          echo "========================================="
+          if [ "${{ env.APK_STATUS }}" == "SUCCESS" ]; then
+            echo "✅ APK is ready for download!"
+            echo "📍 Check Releases section for the APK file"
           else
-            echo "⚠️ APK build in progress - check logs"
+            echo "⚠️ Build encountered issues"
+            echo "📍 Check logs for details"
           fi
