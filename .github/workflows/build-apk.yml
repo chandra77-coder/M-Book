@@ -34,60 +34,62 @@ jobs:
           java-version: '11'
       
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          api-level: 31
-          ndk-version: 25.1.8937393
-      
-      - name: Install Cordova
-        run: npm install -g cordova@latest
-      
-      - name: Create Cordova Project
         run: |
+          sudo apt-get update
+          sudo apt-get install -y android-sdk
+          echo "ANDROID_SDK_ROOT=/usr/lib/android-sdk" >> $GITHUB_ENV
+          echo "ANDROID_HOME=/usr/lib/android-sdk" >> $GITHUB_ENV
+      
+      - name: Install Cordova and dependencies
+        run: |
+          npm install -g cordova@latest
+          npm install -g gradle
+      
+      - name: Create and Build APK
+        run: |
+          # Create Cordova project
           cd /tmp
-          cordova create mbook-cordova com.mbook.app Mbook
-          cd mbook-cordova
-          cordova platform add android@latest
-          echo "✅ Cordova project created"
-      
-      - name: Copy Web App to Cordova
-        run: |
-          rm -rf /tmp/mbook-cordova/www/*
-          cp -r $GITHUB_WORKSPACE/dist/* /tmp/mbook-cordova/www/
-          echo "✅ Web app copied to Cordova project"
-      
-      - name: Build APK
-        run: |
-          cd /tmp/mbook-cordova
-          cordova build android --release 2>&1 | tee build.log
+          cordova create mbook-app com.mbook.app Mbook
+          cd mbook-app
           
-          # Check for APK files
-          echo "Searching for APK files..."
-          find . -name "*.apk" -type f 2>/dev/null | head -10
+          # Add Android platform
+          cordova platform add android
           
-          # Try to find and copy the APK
+          # Copy built web app
+          rm -rf www/*
+          cp -r $GITHUB_WORKSPACE/dist/* www/
+          
+          # Build APK
+          echo "Building APK..."
+          cordova build android --release 2>&1 || true
+          
+          # Check for APK
+          echo "Checking for APK files..."
+          find . -name "*.apk" -type f 2>/dev/null
+          
+          # Copy APK if found
           if [ -f "platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
             cp "platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk" "$GITHUB_WORKSPACE/mbook-app.apk"
             echo "APK_FOUND=true" >> $GITHUB_ENV
-            echo "✅ APK found and copied!"
+            echo "✅ APK built successfully!"
           elif [ -f "platforms/android/app/build/outputs/apk/debug/app-debug.apk" ]; then
             cp "platforms/android/app/build/outputs/apk/debug/app-debug.apk" "$GITHUB_WORKSPACE/mbook-app.apk"
             echo "APK_FOUND=true" >> $GITHUB_ENV
-            echo "✅ Debug APK found and copied!"
+            echo "✅ Debug APK built successfully!"
           else
             echo "APK_FOUND=false" >> $GITHUB_ENV
-            echo "❌ APK not found"
-            cat build.log
+            echo "❌ APK not found - checking build output..."
+            find . -type f -name "build.log" -exec cat {} \;
           fi
       
       - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
         if: env.APK_FOUND == 'true'
+        uses: actions/upload-artifact@v4
         with:
           name: mbook-apk-release
           path: mbook-app.apk
       
-      - name: Create GitHub Release
+      - name: Create Release
         if: env.APK_FOUND == 'true'
         uses: softprops/action-gh-release@v1
         with:
