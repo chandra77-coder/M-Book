@@ -34,16 +34,10 @@ jobs:
           java-version: '11'
       
       - name: Setup Android SDK
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y android-sdk
-          echo "ANDROID_SDK_ROOT=/usr/lib/android-sdk" >> $GITHUB_ENV
-          echo "ANDROID_HOME=/usr/lib/android-sdk" >> $GITHUB_ENV
+        uses: android-actions/setup-android@v3
       
-      - name: Install Cordova and dependencies
-        run: |
-          npm install -g cordova@latest
-          npm install -g gradle
+      - name: Install Cordova
+        run: npm install -g cordova
       
       - name: Create and Build APK
         run: |
@@ -57,29 +51,26 @@ jobs:
           
           # Copy built web app
           rm -rf www/*
-          cp -r $GITHUB_WORKSPACE/dist/* www/
+          cp -r $GITHUB_WORKSPACE/dist/public/* www/
           
           # Build APK
-          echo "Building APK..."
-          cordova build android --release 2>&1 || true
+          cordova build android --release 2>&1 | tee build.log
           
           # Check for APK
-          echo "Checking for APK files..."
-          find . -name "*.apk" -type f 2>/dev/null
-          
-          # Copy APK if found
           if [ -f "platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
             cp "platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk" "$GITHUB_WORKSPACE/mbook-app.apk"
             echo "APK_FOUND=true" >> $GITHUB_ENV
+            ls -lh "$GITHUB_WORKSPACE/mbook-app.apk"
             echo "✅ APK built successfully!"
           elif [ -f "platforms/android/app/build/outputs/apk/debug/app-debug.apk" ]; then
             cp "platforms/android/app/build/outputs/apk/debug/app-debug.apk" "$GITHUB_WORKSPACE/mbook-app.apk"
             echo "APK_FOUND=true" >> $GITHUB_ENV
+            ls -lh "$GITHUB_WORKSPACE/mbook-app.apk"
             echo "✅ Debug APK built successfully!"
           else
             echo "APK_FOUND=false" >> $GITHUB_ENV
-            echo "❌ APK not found - checking build output..."
-            find . -type f -name "build.log" -exec cat {} \;
+            echo "❌ APK not found"
+            find . -name "*.apk" -type f
           fi
       
       - name: Upload APK Artifact
@@ -89,7 +80,7 @@ jobs:
           name: mbook-apk-release
           path: mbook-app.apk
       
-      - name: Create Release
+      - name: Create GitHub Release
         if: env.APK_FOUND == 'true'
         uses: softprops/action-gh-release@v1
         with:
@@ -143,6 +134,5 @@ jobs:
             echo "📍 Download from: Releases section"
           else
             echo "❌ FAILED: APK build did not complete"
-            echo "📍 Check logs above for details"
           fi
           echo "========================================="
