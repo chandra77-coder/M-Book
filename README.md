@@ -15,8 +15,9 @@
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Node.js 18+
+- Node.js 20+
 - pnpm package manager
+- Android Studio (for local Android builds)
 
 ### Installation
 
@@ -31,7 +32,7 @@ pnpm install
 # Run development server
 pnpm run dev
 
-# Build for production
+# Build for production (also syncs assets to Android project)
 pnpm run build
 ```
 
@@ -41,41 +42,30 @@ The APK is automatically built and released via GitHub Actions whenever you push
 
 ### Download APK
 1. Go to the [Releases](https://github.com/chandra77-coder/M-Book/releases) page
-2. Download the latest `mbook-*.apk` file
+2. Download the latest `mbook-app.apk` file
 3. Transfer to your Android phone
 4. Install the APK (enable "Unknown Sources" in Settings if needed)
 
-### Manual Build
+### Manual Local Android Build
 ```bash
-# Install Cordova
-npm install -g cordova
+# 1. Build the web app and sync assets
+pnpm run build
 
-# Create Cordova project
-cordova create mbook com.mbook.app Mbook
-cd mbook
-
-# Add Android platform
-cordova platform add android
-
-# Build APK
-cordova build android --release
+# 2. Build the Android app using Gradle
+cd android
+./gradlew assembleDebug
 ```
+The APK will be located at `android/app/build/outputs/apk/debug/app-debug.apk`.
 
 ## 📱 App Structure
 
 ```
-├── client/
-│   ├── src/
-│   │   ├── pages/
-│   │   │   └── Home.tsx          # Main app component
-│   │   ├── components/           # Reusable UI components
-│   │   ├── contexts/             # React contexts
-│   │   ├── lib/                  # Utility functions
-│   │   └── index.css             # Global styles
-│   └── public/
-├── android/                      # Android native code
-├── app.json                      # Expo configuration
-└── eas.json                      # Build configuration
+├── client/                       # React frontend source
+├── android/                      # Native Android wrapper
+│   └── app/src/main/assets/      # Compiled web assets (synced on build)
+├── shared/                       # Shared constants and types
+├── dist/                         # Compiled web app (production build)
+└── package.json                  # Project dependencies and scripts
 ```
 
 ## 🎨 Design
@@ -104,7 +94,7 @@ All data is stored locally in your device's browser storage (localStorage). No d
 - **Icons**: Lucide React
 - **Charts**: Recharts
 - **Build**: Vite
-- **Mobile**: Cordova/WebView
+- **Mobile**: Native Android WebView Wrapper
 
 ## 📄 License
 
