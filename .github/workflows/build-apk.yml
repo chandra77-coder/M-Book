@@ -82,44 +82,48 @@ jobs:
           path: mbook-app.apk
           retention-days: 30
       
-      - name: Create Release
+      - name: Create Release with GitHub CLI
         if: env.BUILD_SUCCESS == 'true'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: Mbook v1.0.${{ github.run_number }}
-          body: |
-            # 🎉 Mbook v1.0.${{ github.run_number }}
-            
-            ✅ **APK Ready for Installation!**
-            
-            ## 📥 How to Install:
-            
-            1. Download `mbook-app.apk` from the assets below
-            2. Transfer to your Android phone
-            3. Go to Settings → Security → Unknown Sources (toggle ON)
-            4. Open file manager and tap the APK
-            5. Install and enjoy!
-            
-            ## ✨ Features:
-            - 📊 Work entry tracking
-            - 💰 Payment status management (Paid/Unpaid/Undecided)
-            - 📱 QR code upload and display
-            - 📈 Income analytics & reports
-            - 💾 Local data storage
-            - 🌙 Dark theme
-            - 🔒 Complete privacy
-            
-            ## 🔒 Privacy & Security:
-            - ✅ No cloud synchronization
-            - ✅ Works completely offline
-            - ✅ No ads or tracking
-            - ✅ All data stored locally on your device
-          files: mbook-app.apk
-          draft: false
-          prerelease: false
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          TAG_NAME="v1.0.${{ github.run_number }}"
+          RELEASE_NAME="Mbook v1.0.${{ github.run_number }}"
+          
+          echo "Creating release: $RELEASE_NAME"
+          
+          gh release create "$TAG_NAME" \
+            --title "$RELEASE_NAME" \
+            --notes "# 🎉 Mbook v1.0.${{ github.run_number }}
+          
+          ✅ **APK Ready for Installation!**
+          
+          ## 📥 How to Install:
+          
+          1. Download \`mbook-app.apk\` from the assets below
+          2. Transfer to your Android phone
+          3. Go to Settings → Security → Unknown Sources (toggle ON)
+          4. Open file manager and tap the APK
+          5. Install and enjoy!
+          
+          ## ✨ Features:
+          - 📊 Work entry tracking
+          - 💰 Payment status management (Paid/Unpaid/Undecided)
+          - 📱 QR code upload and display
+          - 📈 Income analytics & reports
+          - 💾 Local data storage
+          - 🌙 Dark theme
+          - 🔒 Complete privacy
+          
+          ## 🔒 Privacy & Security:
+          - ✅ No cloud synchronization
+          - ✅ Works completely offline
+          - ✅ No ads or tracking
+          - ✅ All data stored locally on your device" \
+            "$GITHUB_WORKSPACE/mbook-app.apk"
+          
+          echo "✅ Release created successfully!"
       
       - name: Build Failed Notification
         if: env.BUILD_SUCCESS != 'true'
