@@ -38,15 +38,13 @@ jobs:
       
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.5
 
       - name: Build APK with Gradle
         run: |
           cd android
-          # The repo is missing the gradle wrapper (gradlew). 
-          # We'll use the pre-installed gradle to run the build.
-          # Since the project uses features like dependencyResolutionManagement (Gradle 7+),
-          # we need to ensure a compatible Gradle version is used.
-          gradle assembleDebug
+          gradle assembleDebug --stacktrace
           
           echo "Checking for APK..."
           if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
