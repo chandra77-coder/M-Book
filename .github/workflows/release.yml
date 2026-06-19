@@ -6,56 +6,7 @@ on:
       - 'v*'
 
 jobs:
-  create-release:
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Get tag name
-        id: tag
-        run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-      
-      - name: Create Release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ steps.tag.outputs.tag }}
-          release_name: Mbook ${{ steps.tag.outputs.tag }}
-          body: |
-            # 🎉 Mbook ${{ steps.tag.outputs.tag }}
-            
-            ✅ **APK Ready for Installation!**
-            
-            ## 📥 How to Install:
-            
-            1. Download `mbook-app.apk` from the assets below
-            2. Transfer to your Android phone
-            3. Go to Settings → Security → Unknown Sources (toggle ON)
-            4. Open file manager and tap the APK
-            5. Install and enjoy!
-            
-            ## ✨ Features:
-            - 📊 Work entry tracking
-            - 💰 Payment status management (Paid/Unpaid/Undecided)
-            - 📱 QR code upload and display
-            - 📈 Income analytics & reports
-            - 💾 Local data storage
-            - 🌙 Dark theme
-            - 🔒 Complete privacy
-            
-            ## 🔒 Privacy & Security:
-            - ✅ No cloud synchronization
-            - ✅ Works completely offline
-            - ✅ No ads or tracking
-            - ✅ All data stored locally on your device
-          draft: false
-          prerelease: false
-
-  upload-apk:
-    needs: create-release
+  build-and-release:
     runs-on: ubuntu-latest
     
     steps:
@@ -73,7 +24,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install
       
-      - name: Build web app
+      - name: Build web app and sync to Android
         run: pnpm run build
       
       - name: Setup Java
@@ -82,52 +33,40 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
       
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'build-tools;34.0.0 platforms;android-34 cmdline-tools;latest'
-      
-      - name: Install Cordova
-        run: npm install -g cordova
-      
-      - name: Build APK with Cordova
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build APK with Gradle
         run: |
-          set -e
-          echo "Creating Cordova project..."
-          cd /tmp
-          rm -rf mbook-build
-          cordova create mbook-build com.mbook.app Mbook
-          cd mbook-build
-          
-          echo "Adding Android platform..."
-          cordova platform add android@latest
-          
-          echo "Copying web app..."
-          rm -rf www/*
-          cp -r $GITHUB_WORKSPACE/dist/public/* www/
-          
-          echo "Building APK in debug mode..."
-          cordova build android --debug
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
           
           echo "Checking for APK..."
-          if [ -f "platforms/android/app/build/outputs/apk/debug/app-debug.apk" ]; then
+          if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
             echo "✅ Found debug APK"
-            cp "platforms/android/app/build/outputs/apk/debug/app-debug.apk" "$GITHUB_WORKSPACE/mbook-app.apk"
+            cp "app/build/outputs/apk/debug/app-debug.apk" "$GITHUB_WORKSPACE/mbook-app.apk"
           else
             echo "❌ APK not found"
             exit 1
           fi
-      
-      - name: Get Release ID
-        id: release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          RELEASE_ID=$(gh release view ${GITHUB_REF#refs/tags/} --json id -q .id)
-          echo "release_id=$RELEASE_ID" >> $GITHUB_OUTPUT
-      
-      - name: Upload APK to Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload ${GITHUB_REF#refs/tags/} $GITHUB_WORKSPACE/mbook-app.apk
+
+      - name: Create Release and Upload APK
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ github.ref_name }}
+          name: Mbook ${{ github.ref_name }}
+          body: |
+            # 🎉 Mbook ${{ github.ref_name }}
+            
+            ✅ **APK Ready for Installation!**
+            
+            ## 📥 How to Install:
+            
+            1. Download `mbook-app.apk` from the assets below
+            2. Transfer to your Android phone
+            3. Go to Settings → Security → Unknown Sources (toggle ON)
+            4. Open file manager and tap the APK
+            5. Install and enjoy!
+          artifacts: mbook-app.apk
+          token: ${{ secrets.GITHUB_TOKEN }}

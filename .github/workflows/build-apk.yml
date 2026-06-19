@@ -24,7 +24,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install
       
-      - name: Build web app
+      - name: Build web app and sync to Android
         run: pnpm run build
       
       - name: Setup Java
@@ -33,43 +33,23 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
       
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'build-tools;34.0.0 platforms;android-34 cmdline-tools;latest'
-      
-      - name: Install Cordova
-        run: npm install -g cordova
-      
-      - name: Build APK with Cordova
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build APK with Gradle
         run: |
-          set -e
-          echo "Creating Cordova project..."
-          cd /tmp
-          rm -rf mbook-build
-          cordova create mbook-build com.mbook.app Mbook
-          cd mbook-build
-          
-          echo "Adding Android platform..."
-          cordova platform add android@latest
-          
-          echo "Copying web app..."
-          rm -rf www/*
-          cp -r $GITHUB_WORKSPACE/dist/public/* www/
-          
-          echo "Building APK in debug mode..."
-          cordova build android --debug
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
           
           echo "Checking for APK..."
-          if [ -f "platforms/android/app/build/outputs/apk/debug/app-debug.apk" ]; then
+          if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
             echo "✅ Found debug APK"
-            cp "platforms/android/app/build/outputs/apk/debug/app-debug.apk" "$GITHUB_WORKSPACE/mbook-app.apk"
-            echo "APK_PATH=$GITHUB_WORKSPACE/mbook-app.apk" >> $GITHUB_ENV
+            cp "app/build/outputs/apk/debug/app-debug.apk" "$GITHUB_WORKSPACE/mbook-app.apk"
             echo "BUILD_SUCCESS=true" >> $GITHUB_ENV
           else
             echo "❌ APK not found"
-            echo "Listing build outputs..."
-            find . -name "*.apk" 2>/dev/null || echo "No APK files found"
+            find . -name "*.apk"
             echo "BUILD_SUCCESS=false" >> $GITHUB_ENV
             exit 1
           fi
@@ -103,23 +83,11 @@ jobs:
             
             ## ✨ Features:
             - 📊 Work entry tracking
-            - 💰 Payment status management (Paid/Unpaid/Undecided)
+            - 💰 Payment status management
             - 📱 QR code upload and display
             - 📈 Income analytics & reports
             - 💾 Local data storage
             - 🌙 Dark theme
             - 🔒 Complete privacy
-            
-            ## 🔒 Privacy & Security:
-            - ✅ No cloud synchronization
-            - ✅ Works completely offline
-            - ✅ No ads or tracking
-            - ✅ All data stored locally on your device
           artifacts: mbook-app.apk
           token: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Build Failed Notification
-        if: env.BUILD_SUCCESS != 'true'
-        run: |
-          echo "❌ APK build failed - check logs above"
-          exit 1
