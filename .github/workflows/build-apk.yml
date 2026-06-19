@@ -42,6 +42,10 @@ jobs:
       - name: Build APK with Gradle
         run: |
           cd android
+          # The repo is missing the gradle wrapper (gradlew). 
+          # We'll use the pre-installed gradle to run the build.
+          # Since the project uses features like dependencyResolutionManagement (Gradle 7+),
+          # we need to ensure a compatible Gradle version is used.
           gradle assembleDebug
           
           echo "Checking for APK..."

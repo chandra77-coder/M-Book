@@ -6,13 +6,7 @@ pluginManagement {
     }
 }
 
-dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-    repositories {
-        google()
-        mavenCentral()
-    }
-}
+// Repositories are defined in build.gradle for better compatibility with different Gradle versions
 
 rootProject.name = "Mbook"
 include ':app'
