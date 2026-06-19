@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef } from "react";
+import { useTheme } from "@/contexts/ThemeContext";
 import {
   Home as HomeIcon,
   History as HistoryIcon,
@@ -104,6 +105,7 @@ function NavButton({ icon: Icon, label, active, onClick }: { icon: any; label: s
 }
 
 export default function WorkingBuddyDemo() {
+  const { theme, toggleTheme } = useTheme();
   const [tab, setTab] = useState("home");
   const [entries, setEntries] = useState(seedEntries);
   const [filter, setFilter] = useState("all");
@@ -341,7 +343,7 @@ export default function WorkingBuddyDemo() {
 
         {/* Header with logo */}
         <div className="px-5 pt-4 pb-3 border-b border-zinc-800 flex items-center gap-3">
-          <img src="/manus-storage/mbook-logo_74a6c3a9.png" alt="Mbook" className="w-8 h-8" />
+          <img src="/mbook-logo.png" alt="Mbook" className="w-8 h-8" />
           <h1 className="text-white text-xl font-display font-bold">Mbook</h1>
         </div>
 
@@ -696,7 +698,7 @@ export default function WorkingBuddyDemo() {
 
               <div className="flex items-center justify-between mb-5">
                 <span className="text-white">Dark Mode</span>
-                <Switch checked={true} onClick={() => {}} activeClass="bg-amber-500" />
+                <Switch checked={theme === "dark"} onClick={toggleTheme || (() => {})} activeClass="bg-amber-500" />
               </div>
               <div className="h-px bg-zinc-800 mb-5" />
 
