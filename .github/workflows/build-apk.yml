@@ -16,7 +16,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
       
       - name: Install pnpm
         run: npm install -g pnpm
@@ -31,20 +31,18 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '11'
+          java-version: '17'
       
-      - name: Install Android SDK
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y android-sdk-platform-tools android-sdk
-      
-      - name: Setup Gradle
-        uses: gradle/gradle-build-action@v2
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: 34
+          build-tools-version: '34.0.0'
       
       - name: Install Cordova
         run: npm install -g cordova
       
-      - name: Build APK
+      - name: Build APK with Cordova
         run: |
           set -e
           echo "Creating Cordova project..."
@@ -54,30 +52,27 @@ jobs:
           cd mbook-build
           
           echo "Adding Android platform..."
-          cordova platform add android
+          cordova platform add android@latest
           
           echo "Copying web app..."
           rm -rf www/*
           cp -r $GITHUB_WORKSPACE/dist/public/* www/
           
-          echo "Building APK..."
-          cordova build android --release --verbose 2>&1 | head -100
+          echo "Building APK in debug mode..."
+          cordova build android --debug
           
           echo "Checking for APK..."
-          if [ -f "platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
-            echo "Found release APK"
-            cp "platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk" "$GITHUB_WORKSPACE/mbook-app.apk"
-            echo "APK_PATH=$GITHUB_WORKSPACE/mbook-app.apk" >> $GITHUB_ENV
-            echo "BUILD_SUCCESS=true" >> $GITHUB_ENV
-          elif [ -f "platforms/android/app/build/outputs/apk/debug/app-debug.apk" ]; then
-            echo "Found debug APK"
+          if [ -f "platforms/android/app/build/outputs/apk/debug/app-debug.apk" ]; then
+            echo "✅ Found debug APK"
             cp "platforms/android/app/build/outputs/apk/debug/app-debug.apk" "$GITHUB_WORKSPACE/mbook-app.apk"
             echo "APK_PATH=$GITHUB_WORKSPACE/mbook-app.apk" >> $GITHUB_ENV
             echo "BUILD_SUCCESS=true" >> $GITHUB_ENV
           else
-            echo "APK not found, listing outputs..."
-            find . -name "*.apk" -o -name "*.aab" 2>/dev/null || echo "No APK/AAB found"
+            echo "❌ APK not found"
+            echo "Listing build outputs..."
+            find . -name "*.apk" 2>/dev/null || echo "No APK files found"
             echo "BUILD_SUCCESS=false" >> $GITHUB_ENV
+            exit 1
           fi
       
       - name: Upload APK Artifact
@@ -86,10 +81,11 @@ jobs:
         with:
           name: mbook-apk
           path: mbook-app.apk
+          retention-days: 30
       
       - name: Create Release
         if: env.BUILD_SUCCESS == 'true'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: Mbook v1.0.${{ github.run_number }}
@@ -100,20 +96,26 @@ jobs:
             
             ## 📥 How to Install:
             
-            1. Download `mbook-app.apk`
+            1. Download `mbook-app.apk` from the assets below
             2. Transfer to your Android phone
             3. Go to Settings → Security → Unknown Sources (toggle ON)
             4. Open file manager and tap the APK
             5. Install and enjoy!
             
             ## ✨ Features:
-            - Work entry tracking
-            - Payment status management (Paid/Unpaid/Undecided)
-            - QR code upload
-            - Income analytics
-            - Local data storage
-            - Dark theme
-            - Complete privacy
+            - 📊 Work entry tracking
+            - 💰 Payment status management (Paid/Unpaid/Undecided)
+            - 📱 QR code upload and display
+            - 📈 Income analytics & reports
+            - 💾 Local data storage
+            - 🌙 Dark theme
+            - 🔒 Complete privacy
+            
+            ## 🔒 Privacy & Security:
+            - ✅ No cloud synchronization
+            - ✅ Works completely offline
+            - ✅ No ads or tracking
+            - ✅ All data stored locally on your device
           files: mbook-app.apk
           draft: false
           prerelease: false
@@ -123,5 +125,5 @@ jobs:
       - name: Build Failed Notification
         if: env.BUILD_SUCCESS != 'true'
         run: |
-          echo "❌ APK build failed"
+          echo "❌ APK build failed - check logs above"
           exit 1

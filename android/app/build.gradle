@@ -1,28 +1,21 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 33
+    compileSdkVersion 34
     
     defaultConfig {
         applicationId "com.mbook.app"
         minSdkVersion 21
-        targetSdkVersion 33
+        targetSdkVersion 34
         versionCode 1
         versionName "1.0.0"
     }
     
-    signingConfigs {
-        release {
-            storeFile file("mbook-keystore.jks")
-            storePassword System.getenv("KEYSTORE_PASSWORD") ?: "mbook2024"
-            keyAlias System.getenv("KEY_ALIAS") ?: "mbook"
-            keyPassword System.getenv("KEY_PASSWORD") ?: "mbook2024"
-        }
-    }
-    
     buildTypes {
+        debug {
+            debuggable true
+        }
         release {
-            signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
