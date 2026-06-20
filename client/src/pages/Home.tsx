@@ -118,7 +118,7 @@ export default function MBookApp() {
   });
   const [filter, setFilter] = useState("all");
   const [showAdd, setShowAdd] = useState(false);
-  const [qrImage, setQrImage] = useState<string | null>(() => localStorage.getItem("mbook_qr"));
+  const [qrImage, setQrImage] = useState<string | null>(() => localStorage.getItem("mbook_qr") || "/payment-qr.jpg");
   const [importText, setImportText] = useState("");
   const [showImport, setShowImport] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -612,18 +612,18 @@ export default function MBookApp() {
 
                 <div className="bg-white rounded-[2.5rem] p-8 flex flex-col items-center shadow-2xl relative">
                   <div className="absolute top-4 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-zinc-100 rounded-full" />
-                  {qrImage ? (
+                  <div className="w-full flex justify-center">
                     <img
-                      src={qrImage}
+                      src={qrImage || "/payment-qr.jpg"}
                       alt="QR"
-                      className="w-56 h-56 object-contain"
+                      className="w-64 h-64 object-contain rounded-2xl shadow-inner"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = "/payment-qr.jpg";
+                      }}
                     />
-                  ) : (
-                    <div className="w-56 h-56 rounded-3xl bg-zinc-50 border-2 border-dashed border-zinc-200 flex flex-col items-center justify-center gap-3">
-                      <QrCode size={48} className="text-zinc-300" />
-                      <p className="text-zinc-400 text-[10px] font-bold uppercase">No QR Code</p>
-                    </div>
-                  )}
+                  </div>
+
                   <div className="mt-6 text-center">
                     <p className="text-zinc-900 font-bold text-sm">Scan to Pay</p>
                     <p className="text-zinc-400 text-[10px] font-medium mt-1 uppercase tracking-widest">Instant Online Payment</p>
