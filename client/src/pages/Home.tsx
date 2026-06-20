@@ -226,13 +226,15 @@ export default function MBookApp() {
   const todayName = dayLabel(0);
 
   const serviceBreakdown = useMemo(() => {
-    const sums: Record<string, number> = {};
-    workEntries.forEach((e) => {
-      const service = e.service === "Other" ? e.customNote || "Other" : e.service || "Other";
-      sums[service] = (sums[service] || 0) + e.amount;
+    const serviceCounts: Record<string, number> = {};
+    workEntries.forEach((entry) => {
+      const service = entry.service === "Other" ? entry.customNote || "Other" : entry.service || "Other";
+      serviceCounts[service] = (serviceCounts[service] || 0) + 1;
     });
-    const total = Object.values(sums).reduce((a, b) => a + b, 0) || 1;
-    return Object.entries(sums).map(([name, value]) => ({ name, pct: Math.round((value / total) * 100) })).sort((a, b) => b.pct - a.pct);
+    const maxCount = Math.max(1, ...Object.values(serviceCounts));
+    return Object.entries(serviceCounts)
+      .map(([name, count]) => ({ name, count, width: Math.round((count / maxCount) * 100) }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   }, [workEntries]);
 
   const filteredEntries = useMemo(() => {
@@ -514,7 +516,7 @@ export default function MBookApp() {
                 </div>
                 <div className="rounded-3xl border border-[#2A2D35] bg-[#181B22] p-5">
                   <h3 className="mb-4 font-display font-bold">Services Share</h3>
-                  {serviceBreakdown.length === 0 ? <p className="py-4 text-center text-xs text-[#8B8F99]">No services recorded yet</p> : serviceBreakdown.map((item) => <div key={item.name} className="mb-4"><div className="mb-2 flex justify-between text-xs font-bold"><span className="text-[#8B8F99]">{item.name}</span><span>{item.pct}%</span></div><div className="h-1.5 overflow-hidden rounded-full bg-[#1F2229]"><div className="h-full" style={{ width: `${item.pct}%`, background: GOLD_GRADIENT }} /></div></div>)}
+                  {serviceBreakdown.length === 0 ? <p className="py-4 text-center text-xs text-[#8B8F99]">No services recorded yet</p> : serviceBreakdown.map((item) => <div key={item.name} className="mb-4"><div className="mb-2 flex justify-between gap-3 text-xs font-bold"><span className="truncate text-[#8B8F99]">{item.name}</span><span className="shrink-0 text-[#F5F5F7]">{item.count} {item.count === 1 ? "work" : "works"}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-[#1F2229]"><div className="h-full" style={{ width: `${item.width}%`, background: GOLD_GRADIENT }} /></div></div>)}
                 </div>
               </motion.div>
             )}
