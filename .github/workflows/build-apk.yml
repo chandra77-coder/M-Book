@@ -11,31 +11,34 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      
-      - name: Install pnpm
-        run: npm install -g pnpm
-      
+
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.4.1 --activate
+          pnpm --version
+
       - name: Install dependencies
-        run: pnpm install
-      
+        run: pnpm install --no-frozen-lockfile
+
       - name: Build web app and sync to Android
         run: pnpm run build
-      
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '11'
-      
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
@@ -44,11 +47,10 @@ jobs:
       - name: Build APK with Gradle
         run: |
           cd android
-          # Manually restore the missing gradlew wrapper
-          gradle wrapper
+          gradle wrapper --gradle-version 7.6.1
           chmod +x gradlew
-          ./gradlew assembleDebug --info --stacktrace
-          
+          ./gradlew assembleDebug --stacktrace
+
           echo "Checking for APK..."
           if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
             echo "✅ Found debug APK"
@@ -60,7 +62,7 @@ jobs:
             echo "BUILD_SUCCESS=false" >> $GITHUB_ENV
             exit 1
           fi
-      
+
       - name: Upload APK Artifact
         if: env.BUILD_SUCCESS == 'true'
         uses: actions/upload-artifact@v4
@@ -68,8 +70,8 @@ jobs:
           name: mbook-apk
           path: mbook-app.apk
           retention-days: 30
-      
-      - name: Create Release
+
+      - name: Create GitHub Release
         if: env.BUILD_SUCCESS == 'true'
         uses: ncipollo/release-action@v1
         with:
@@ -78,25 +80,22 @@ jobs:
           allowUpdates: true
           replacesArtifacts: true
           body: |
-            # 🎉 Mbook v1.0.${{ github.run_number }}
-            
-            ✅ **APK Ready for Installation!**
-            
-            ## 📥 How to Install:
-            
-            1. Download `mbook-app.apk` from the assets below
-            2. Transfer to your Android phone
-            3. Go to Settings → Security → Unknown Sources (toggle ON)
-            4. Open file manager and tap the APK
-            5. Install and enjoy!
-            
-            ## ✨ Features:
-            - 📊 Work entry tracking
-            - 💰 Payment status management
-            - 📱 QR code upload and display
-            - 📈 Income analytics & reports
-            - 💾 Local data storage
-            - 🌙 Dark theme
-            - 🔒 Complete privacy
+            # Mbook v1.0.${{ github.run_number }}
+
+            APK ready for Android installation.
+
+            ## Latest updates
+            - Premium dark gold theme
+            - Editable work records
+            - Newest records first
+            - Paid, Unpaid and Undecided filters
+            - Undecided amount fixed at ₹0 until edited
+            - Services Share now shows number of works instead of percentage
+            - Work entries and QR image saved in local device storage
+
+            ## Install
+            1. Download `mbook-app.apk` from the release assets.
+            2. Open it on your Android phone.
+            3. Allow install from unknown sources if Android asks.
           artifacts: mbook-app.apk
           token: ${{ secrets.GITHUB_TOKEN }}
