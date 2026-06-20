@@ -218,6 +218,7 @@ export default function MBookApp() {
   const maxWeekly = Math.max(1, ...Object.values(weeklyData));
 
   const serviceBreakdown = useMemo(() => {
+    if (workEntries.length === 0) return [];
     const sums: Record<string, number> = {};
     workEntries.forEach((e) => {
       const key = e.service === "Other" ? e.customNote || "Other" : (e.service || "Other");
@@ -384,6 +385,7 @@ export default function MBookApp() {
           </div>
           <button 
             onClick={() => setTab("settings")}
+            aria-label="Settings"
             className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-900/50 flex items-center justify-center border border-zinc-200 dark:border-zinc-800/50 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
           >
             <SettingsIcon size={18} />
@@ -612,21 +614,25 @@ export default function MBookApp() {
                 <div className="space-y-4">
                   <h3 className="text-zinc-900 dark:text-white font-display font-bold px-1">Services Share</h3>
                   <div className="bg-zinc-100 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800/50 rounded-3xl p-5 space-y-4 transition-colors">
-                    {serviceBreakdown.map((s) => (
-                      <div key={s.name}>
-                        <div className="flex justify-between text-xs font-bold mb-2">
-                          <span className="text-zinc-400">{s.name}</span>
-                          <span className="text-zinc-900 dark:text-white">{s.pct}%</span>
+                    {serviceBreakdown.length === 0 ? (
+                      <p className="text-center text-zinc-500 text-xs py-4">No services recorded yet</p>
+                    ) : (
+                      serviceBreakdown.map((s) => (
+                        <div key={s.name}>
+                          <div className="flex justify-between text-xs font-bold mb-2">
+                            <span className="text-zinc-400">{s.name}</span>
+                            <span className="text-zinc-900 dark:text-white">{s.pct}%</span>
+                          </div>
+                          <div className="h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+                            <motion.div
+                              initial={{ width: 0 }}
+                              animate={{ width: `${s.pct}%` }}
+                              className="h-full bg-amber-500/60"
+                            />
+                          </div>
                         </div>
-                        <div className="h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
-                          <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: `${s.pct}%` }}
-                            className="h-full bg-amber-500/60"
-                          />
-                        </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </div>
               </motion.div>
@@ -807,6 +813,7 @@ export default function MBookApp() {
           <div className="relative -top-6">
             <button
               onClick={() => setShowAdd(true)}
+              aria-label="Add new record"
               className="w-14 h-14 bg-amber-500 text-zinc-950 rounded-2xl flex items-center justify-center shadow-2xl shadow-amber-900/40 active:scale-90 transition-transform"
             >
               <Plus size={28} strokeWidth={3} />
@@ -839,12 +846,13 @@ export default function MBookApp() {
                   
                   <div className="flex items-center justify-between mb-8">
                     <h2 className="text-zinc-900 dark:text-white text-2xl font-display font-extrabold">New Record</h2>
-                    <button 
-                      onClick={() => setShowAdd(false)}
-                      className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500 dark:text-zinc-400"
-                    >
-                      <X size={20} />
-                    </button>
+                  <button 
+                    onClick={() => setShowAdd(false)}
+                    aria-label="Close modal"
+                    className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500 dark:text-zinc-400"
+                  >
+                    <X size={20} />
+                  </button>
                   </div>
 
                   <div className="flex gap-2 p-1 bg-zinc-100 dark:bg-zinc-950 rounded-2xl mb-6 transition-colors">
