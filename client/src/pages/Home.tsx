@@ -389,7 +389,7 @@ export default function MBookApp() {
         <header className="sticky top-0 z-20 flex items-center justify-between bg-[#0D0F14]/90 px-6 pb-4 pt-6 backdrop-blur-xl">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl shadow-lg" style={{ background: GOLD_GRADIENT }}>
-              <img src="/mbook-logo.png" alt="M" className="h-6 w-6 invert" />
+              <img src="/mbook-logo.svg" alt="M" className="h-6 w-6 invert" />
             </div>
             <div>
               <h1 className="font-display text-xl font-extrabold tracking-tight text-[#F5F5F7]">Mbook</h1>
