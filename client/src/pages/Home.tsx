@@ -125,6 +125,11 @@ const TRANSLATIONS = {
     noServices: "No services recorded yet",
     works: "works",
     work_one: "work",
+    photoWork: "Photo Work",
+    filterByService: "Filter by Service",
+    totalPhotos: "Total Photos",
+    cashPayments: "Cash Payments",
+    onlinePayments: "Online Payments",
   },
   hi: {
     home: "होम",
@@ -185,6 +190,11 @@ const TRANSLATIONS = {
     noServices: "अभी तक कोई रिकॉर्ड नहीं है",
     works: "काम",
     work_one: "काम",
+    photoWork: "फोटो काम",
+    filterByService: "सेवा के अनुसार फ़िल्टर करें",
+    totalPhotos: "कुल फोटो",
+    cashPayments: "नकद भुगतान",
+    onlinePayments: "ऑनलाइन भुगतान",
   }
 };
 
@@ -233,6 +243,7 @@ export default function MBookApp() {
   const [tab, setTab] = useState("home");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [serviceFilter, setServiceFilter] = useState<string>("all");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [showImport, setShowImport] = useState(false);
@@ -296,6 +307,7 @@ export default function MBookApp() {
   const entriesWithDaysAgo = useMemo<EntryWithDaysAgo[]>(() => entries.map((entry) => ({ ...entry, daysAgo: daysAgoFrom(entry.date) })), [entries]);
   const workEntries = entriesWithDaysAgo.filter((e) => e.type === "work");
   const spendEntries = entriesWithDaysAgo.filter((e) => e.type === "spend");
+  const photoEntries = workEntries.filter((e) => e.photo);
 
   const totalEarned = workEntries.filter((e) => e.status === "paid").reduce((sum, e) => sum + e.amount, 0);
   const totalUnpaid = workEntries.filter((e) => e.status === "unpaid").reduce((sum, e) => sum + e.amount, 0);
@@ -308,13 +320,28 @@ export default function MBookApp() {
     if (dateFilter === "week") list = list.filter((e) => e.daysAgo >= 0 && e.daysAgo <= 6);
     if (dateFilter === "month") list = list.filter((e) => e.daysAgo >= 0 && e.daysAgo <= 30);
     if (statusFilter !== "all") list = list.filter((e) => e.type === "work" && e.status === statusFilter);
+    if (serviceFilter !== "all") list = list.filter((e) => e.type === "work" && (e.service === serviceFilter || (e.service === "Other" && e.customNote)));
     return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [entriesWithDaysAgo, dateFilter, statusFilter]);
+  }, [entriesWithDaysAgo, dateFilter, statusFilter, serviceFilter]);
 
   const generateEntryCode = () => {
     const code = `MB-${String(nextEntryNum).padStart(4, "0")}`;
     return code;
   };
+
+  // Calculate payment method statistics
+  const cashPayments = workEntries.filter((e) => e.method === "cash" && e.status === "paid").reduce((sum, e) => sum + e.amount, 0);
+  const onlinePayments = workEntries.filter((e) => e.method === "online" && e.status === "paid").reduce((sum, e) => sum + e.amount, 0);
+
+  // Calculate service-wise earnings
+  const serviceEarnings = useMemo(() => {
+    const earnings: { [key: string]: number } = {};
+    workEntries.filter((e) => e.status === "paid").forEach((entry) => {
+      const service = entry.service === "Other" ? entry.customNote : entry.service;
+      earnings[service || "Unknown"] = (earnings[service || "Unknown"] || 0) + entry.amount;
+    });
+    return Object.entries(earnings).sort((a, b) => b[1] - a[1]);
+  }, [workEntries]);
 
   function openNewForm(photo?: string) {
     setEditingId(null);
@@ -501,6 +528,19 @@ export default function MBookApp() {
                   ))}
                 </div>
               </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[#8B8F99] mb-2">{t.filterByService}</p>
+                  <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                    <button onClick={() => setServiceFilter("all")} className={`shrink-0 rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-widest transition ${serviceFilter === "all" ? "text-[#0D0F14]" : "border border-[#2A2D35] text-[#8B8F99]"}`} style={serviceFilter === "all" ? { background: GOLD_GRADIENT } : {}}>{t.all}</button>
+                    {services.map((s) => (
+                      <button key={s} onClick={() => setServiceFilter(s)} className={`shrink-0 rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-widest transition ${serviceFilter === s ? "text-[#0D0F14]" : "border border-[#2A2D35] text-[#8B8F99]"}`} style={serviceFilter === s ? { background: GOLD_GRADIENT } : {}}>{s}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
               <div className="space-y-3">
                 {filteredEntries.map((entry) => (
                   <div key={entry.id} className="rounded-2xl border border-[#2A2D35] bg-[#181B22] p-4">
@@ -538,6 +578,176 @@ export default function MBookApp() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </motion.div>
+          )}
+
+          {tab === "summary" && (
+            <motion.div key="summary" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} className="space-y-6">
+              <div className="pt-2">
+                <h2 className="font-display text-3xl font-extrabold">{t.analysis}</h2>
+              </div>
+
+              <div className="rounded-3xl border border-[#2A2D35] bg-[#181B22] p-6 space-y-4">
+                <h3 className="font-bold text-lg">{t.paymentModes}</h3>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-4 rounded-2xl bg-[#0D0F14]">
+                    <div className="flex items-center gap-3">
+                      <div className="w-3 h-3 rounded-full" style={{ background: "#4ADE80" }}></div>
+                      <span className="text-sm font-medium">{t.cash}</span>
+                    </div>
+                    <span className="font-bold text-[#4ADE80]">{inr(cashPayments)}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-4 rounded-2xl bg-[#0D0F14]">
+                    <div className="flex items-center gap-3">
+                      <div className="w-3 h-3 rounded-full" style={{ background: "#60A5FA" }}></div>
+                      <span className="text-sm font-medium">{t.online}</span>
+                    </div>
+                    <span className="font-bold text-[#60A5FA]">{inr(onlinePayments)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-[#2A2D35] bg-[#181B22] p-6 space-y-4">
+                <h3 className="font-bold text-lg">{t.servicesShare}</h3>
+                {serviceEarnings.length > 0 ? (
+                  <div className="space-y-3">
+                    {serviceEarnings.map(([service, amount]) => {
+                      const percentage = totalEarned > 0 ? (amount / totalEarned) * 100 : 0;
+                      return (
+                        <div key={service} className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium truncate">{service}</span>
+                            <span className="font-bold text-[#E8C468]">{inr(amount)}</span>
+                          </div>
+                          <div className="w-full h-2 rounded-full bg-[#0D0F14] overflow-hidden">
+                            <div className="h-full" style={{ width: `${percentage}%`, background: GOLD_GRADIENT }}></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-[#8B8F99] text-sm">{t.noServices}</p>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {tab === "qr" && (
+            <motion.div key="qr" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} className="space-y-6">
+              <div className="pt-2">
+                <h2 className="font-display text-3xl font-extrabold">{t.pay}</h2>
+              </div>
+
+              <div className="rounded-3xl border border-[#2A2D35] bg-[#181B22] p-6 space-y-6">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-widest text-[#8B8F99] mb-4">{t.scanToPay}</p>
+                  {qrImage && (
+                    <div className="rounded-2xl overflow-hidden border border-[#2A2D35] bg-white p-4">
+                      <img src={qrImage} alt="Payment QR" className="w-full h-auto" />
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-4 border-t border-[#2A2D35] pt-6">
+                  <p className="text-xs font-black uppercase tracking-widest text-[#8B8F99]">{t.logPayment}</p>
+                  <input 
+                    type="text" 
+                    placeholder={t.qrCustomerPlaceholder} 
+                    value={qrCustomer} 
+                    onChange={(e) => setQrCustomer(e.target.value)} 
+                    className={inputClass}
+                  />
+                  <input 
+                    type="number" 
+                    placeholder={t.qrAmountPlaceholder} 
+                    value={qrAmount} 
+                    onChange={(e) => setQrAmount(e.target.value)} 
+                    className={`${inputClass} font-display text-xl font-bold`}
+                  />
+                  <button 
+                    onClick={() => {
+                      if (qrAmount && qrCustomer) {
+                        const newEntry: Entry = {
+                          id: Date.now(),
+                          entryCode: generateEntryCode(),
+                          type: "work",
+                          service: "Other",
+                          customNote: qrCustomer,
+                          customer: qrCustomer,
+                          amount: parseFloat(qrAmount),
+                          status: "paid",
+                          method: "online",
+                          date: new Date().toISOString(),
+                        };
+                        setEntries((prev) => [...prev, newEntry]);
+                        setNextEntryNum((n) => n + 1);
+                        setQrAmount("");
+                        setQrCustomer("");
+                        alert(lang === "en" ? "Payment logged successfully!" : "भुगतान सफलतापूर्वक लॉग किया गया!");
+                      }
+                    }}
+                    className="w-full rounded-2xl py-4 font-black uppercase tracking-widest text-[#0D0F14] shadow-xl active:scale-95 transition-transform" 
+                    style={{ background: GOLD_GRADIENT }}
+                  >
+                    {t.logPayment}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {tab === "photo-work" && (
+            <motion.div key="photo-work" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} className="space-y-6">
+              <div className="pt-2">
+                <h2 className="font-display text-3xl font-extrabold">{t.photoWork}</h2>
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#8B8F99] mt-2">{t.totalPhotos}: {photoEntries.length}</p>
+              </div>
+
+              <div className="space-y-3">
+                {photoEntries.length > 0 ? (
+                  photoEntries.map((entry) => (
+                    <div key={entry.id} className="rounded-2xl border border-[#2A2D35] bg-[#181B22] overflow-hidden">
+                      {entry.photo && (
+                        <div className="relative group">
+                          <img src={entry.photo} alt="Work" className="w-full h-48 object-cover" />
+                          <button onClick={() => setShowPhotoViewer(entry.photo!)} className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Eye size={32} className="text-white" />
+                          </button>
+                        </div>
+                      )}
+                      <div className="p-4">
+                        <p className="text-[10px] font-black text-[#E8C468] uppercase tracking-widest">{entry.entryCode}</p>
+                        <h4 className="font-bold text-lg mt-1">
+                          {entry.service === "Other" ? entry.customNote : entry.service}
+                        </h4>
+                        <p className="text-xs text-[#8B8F99] font-medium mt-1">{formatDate(entry.date, lang)} • {formatTime(entry.date, lang)}</p>
+                        <div className="flex items-center justify-between mt-3">
+                          <p className="text-sm font-black text-[#E8C468]">{inr(entry.amount)}</p>
+                          {entry.status && (
+                            <span className={`text-[10px] font-black uppercase tracking-widest ${entry.status === "paid" ? "text-[#4ADE80]" : entry.status === "unpaid" ? "text-[#F87171]" : "text-[#E8C468]"}`}>
+                              {t[entry.status]}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex gap-2 mt-4">
+                          <button onClick={() => editEntry(entry)} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-[#1F2229] py-2 text-[10px] font-black uppercase text-[#8B8F99] hover:text-[#E8C468] transition-colors">
+                            <Edit3 size={14} /> Edit
+                          </button>
+                          <button onClick={() => deleteEntry(entry.id)} className="w-12 flex items-center justify-center rounded-xl bg-[#F87171]/10 text-[#F87171] py-2 transition-colors hover:bg-[#F87171]/20">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-12">
+                    <Camera size={48} className="mx-auto text-[#2A2D35] mb-4" />
+                    <p className="text-[#8B8F99]">{t.noPhoto}</p>
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
