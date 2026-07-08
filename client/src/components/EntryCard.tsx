@@ -1,6 +1,20 @@
 import React from "react";
-import { Edit3, Eye, Trash2, HistoryIcon } from "lucide-react";
-import { Entry } from "@/types/entry";
+import { Edit3, Eye, Trash2, History as HistoryIcon } from "lucide-react";
+
+interface Entry {
+  id: number;
+  entryCode: string;
+  type: "work" | "spend";
+  service?: string;
+  customNote?: string;
+  customer?: string;
+  amount: number;
+  status?: "paid" | "unpaid" | "undecided";
+  method?: "cash" | "online";
+  note?: string;
+  date: string;
+  photo?: string;
+}
 
 interface EntryCardProps {
   entry: Entry & { daysAgo: number };
