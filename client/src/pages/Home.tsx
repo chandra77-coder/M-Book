@@ -1,19 +1,15 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   BarChart3,
-  Banknote,
   ChevronRight,
-  Download,
   Edit3,
   History as HistoryIcon,
   Home as HomeIcon,
-  PieChart,
   Plus,
   QrCode,
   Settings as SettingsIcon,
-  Smartphone,
   Trash2,
   Upload,
   X,
@@ -21,11 +17,19 @@ import {
   Eye,
   Languages,
   Check,
-  RotateCcw
+  RotateCcw,
 } from "lucide-react";
-
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const GOLD_GRADIENT = "linear-gradient(135deg, #D4A24E 0%, #E8C468 100%)";
+import { EntryCard, HistoryEntryCard } from "@/components/EntryCard";
+import {
+  WEEKDAYS,
+  GOLD_GRADIENT,
+  daysAgoFrom,
+  formatDate,
+  formatTime,
+  inr,
+  calculateStats,
+  debounce,
+} from "@/utils/helpers";
 
 type EntryType = "work" | "spend";
 type EntryStatus = "paid" | "unpaid" | "undecided";
@@ -46,7 +50,7 @@ interface Entry {
   method?: PaymentMethod;
   note?: string;
   date: string;
-  photo?: string; // base64
+  photo?: string;
 }
 
 interface EntryWithDaysAgo extends Entry {
@@ -195,7 +199,7 @@ const TRANSLATIONS = {
     totalPhotos: "कुल फोटो",
     cashPayments: "नकद भुगतान",
     onlinePayments: "ऑनलाइन भुगतान",
-  }
+  },
 };
 
 function emptyForm(): EntryForm {
@@ -212,31 +216,87 @@ function emptyForm(): EntryForm {
   };
 }
 
-function daysAgoFrom(date: string) {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return Math.floor((now.getTime() - d.getTime()) / 86400000);
-}
+// Memoized subcomponents to prevent unnecessary re-renders
+const StatsCard = React.memo(
+  ({ totalBalance, income, expense, unpaid, t }: any) => (
+    <div className="rounded-[2.5rem] border border-[#2A2D35] bg-[#181B22] p-8 shadow-2xl relative overflow-hidden">
+      <div className="absolute top-0 right-0 w-32 h-32 bg-[#E8C468]/5 rounded-full -mr-16 -mt-16 blur-3xl" />
+      <p className="text-xs font-black uppercase tracking-widest text-[#8B8F99]">{t.totalBalance}</p>
+      <h3 className="mb-6 mt-1 font-display text-4xl font-extrabold text-transparent bg-clip-text" style={{ backgroundImage: GOLD_GRADIENT }}>
+        {inr(totalBalance)}
+      </h3>
+      <div className="grid grid-cols-3 gap-3">
+        <div>
+          <p className="text-[10px] font-black uppercase text-[#8B8F99]">{t.income}</p>
+          <p className="font-bold text-[#4ADE80]">{inr(income)}</p>
+        </div>
+        <div>
+          <p className="text-[10px] font-black uppercase text-[#8B8F99]">{t.expense}</p>
+          <p className="font-bold text-[#F87171]">{inr(expense)}</p>
+        </div>
+        <div>
+          <p className="text-[10px] font-black uppercase text-[#8B8F99]">{t.unpaid}</p>
+          <p className="font-bold text-[#E8C468]">{inr(unpaid)}</p>
+        </div>
+      </div>
+    </div>
+  )
+);
+StatsCard.displayName = "StatsCard";
 
-function dayLabel(daysAgo: number) {
-  const d = new Date();
-  d.setDate(d.getDate() - daysAgo);
-  return WEEKDAYS[d.getDay()];
-}
+const PaymentMethodsSection = React.memo(
+  ({ cashPayments, onlinePayments, t }: any) => (
+    <div className="rounded-3xl border border-[#2A2D35] bg-[#181B22] p-6 space-y-4">
+      <h3 className="font-bold text-lg">{t.paymentModes}</h3>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between p-4 rounded-2xl bg-[#0D0F14]">
+          <div className="flex items-center gap-3">
+            <div className="w-3 h-3 rounded-full" style={{ background: "#4ADE80" }}></div>
+            <span className="text-sm font-medium">{t.cash}</span>
+          </div>
+          <span className="font-bold text-[#4ADE80]">{inr(cashPayments)}</span>
+        </div>
+        <div className="flex items-center justify-between p-4 rounded-2xl bg-[#0D0F14]">
+          <div className="flex items-center gap-3">
+            <div className="w-3 h-3 rounded-full" style={{ background: "#60A5FA" }}></div>
+            <span className="text-sm font-medium">{t.online}</span>
+          </div>
+          <span className="font-bold text-[#60A5FA]">{inr(onlinePayments)}</span>
+        </div>
+      </div>
+    </div>
+  )
+);
+PaymentMethodsSection.displayName = "PaymentMethodsSection";
 
-function formatDate(date: string, lang: Language) {
-  const d = new Date(date);
-  if (Number.isNaN(d.getTime())) return "No date";
-  return d.toLocaleDateString(lang === "hi" ? "hi-IN" : "en-IN", { day: "2-digit", month: "short" });
-}
-
-function formatTime(date: string, lang: Language) {
-  const d = new Date(date);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString(lang === "hi" ? "hi-IN" : "en-IN", { hour: "2-digit", minute: "2-digit" });
-}
+const ServiceEarningsSection = React.memo(
+  ({ serviceEarnings, totalEarned, t }: any) => (
+    <div className="rounded-3xl border border-[#2A2D35] bg-[#181B22] p-6 space-y-4">
+      <h3 className="font-bold text-lg">{t.servicesShare}</h3>
+      {serviceEarnings.length > 0 ? (
+        <div className="space-y-3">
+          {serviceEarnings.map(([service, amount]: any) => {
+            const percentage = totalEarned > 0 ? (amount / totalEarned) * 100 : 0;
+            return (
+              <div key={service} className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium truncate">{service}</span>
+                  <span className="font-bold text-[#E8C468]">{inr(amount)}</span>
+                </div>
+                <div className="w-full h-2 rounded-full bg-[#0D0F14] overflow-hidden">
+                  <div className="h-full" style={{ width: `${percentage}%`, background: GOLD_GRADIENT }}></div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="text-[#8B8F99] text-sm">{t.noServices}</p>
+      )}
+    </div>
+  )
+);
+ServiceEarningsSection.displayName = "ServiceEarningsSection";
 
 export default function MBookApp() {
   const { theme, toggleTheme } = useTheme();
@@ -282,8 +342,12 @@ export default function MBookApp() {
     }
   });
 
+  // Debounced localStorage saves to prevent excessive writes
   useEffect(() => {
-    localStorage.setItem("mbook_entries", JSON.stringify(entries));
+    const timer = setTimeout(() => {
+      localStorage.setItem("mbook_entries", JSON.stringify(entries));
+    }, 1000);
+    return () => clearTimeout(timer);
   }, [entries]);
 
   useEffect(() => {
@@ -302,17 +366,16 @@ export default function MBookApp() {
     localStorage.setItem("mbook_next_num", String(nextEntryNum));
   }, [nextEntryNum]);
 
-  const inr = (n: number) => `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+  const entriesWithDaysAgo = useMemo<EntryWithDaysAgo[]>(
+    () => entries.map((entry) => ({ ...entry, daysAgo: daysAgoFrom(entry.date) })),
+    [entries]
+  );
 
-  const entriesWithDaysAgo = useMemo<EntryWithDaysAgo[]>(() => entries.map((entry) => ({ ...entry, daysAgo: daysAgoFrom(entry.date) })), [entries]);
-  const workEntries = entriesWithDaysAgo.filter((e) => e.type === "work");
-  const spendEntries = entriesWithDaysAgo.filter((e) => e.type === "spend");
-  const photoEntries = workEntries.filter((e) => e.photo);
+  const workEntries = useMemo(() => entriesWithDaysAgo.filter((e) => e.type === "work"), [entriesWithDaysAgo]);
+  const spendEntries = useMemo(() => entriesWithDaysAgo.filter((e) => e.type === "spend"), [entriesWithDaysAgo]);
+  const photoEntries = useMemo(() => workEntries.filter((e) => e.photo), [workEntries]);
 
-  const totalEarned = workEntries.filter((e) => e.status === "paid").reduce((sum, e) => sum + e.amount, 0);
-  const totalUnpaid = workEntries.filter((e) => e.status === "unpaid").reduce((sum, e) => sum + e.amount, 0);
-  const totalSpend = spendEntries.reduce((sum, e) => sum + e.amount, 0);
-  const netProfit = totalEarned - totalSpend;
+  const stats = useMemo(() => calculateStats(workEntries, spendEntries), [workEntries, spendEntries]);
 
   const filteredEntries = useMemo(() => {
     let list = [...entriesWithDaysAgo];
@@ -320,82 +383,89 @@ export default function MBookApp() {
     if (dateFilter === "week") list = list.filter((e) => e.daysAgo >= 0 && e.daysAgo <= 6);
     if (dateFilter === "month") list = list.filter((e) => e.daysAgo >= 0 && e.daysAgo <= 30);
     if (statusFilter !== "all") list = list.filter((e) => e.type === "work" && e.status === statusFilter);
-    if (serviceFilter !== "all") list = list.filter((e) => e.type === "work" && (e.service === serviceFilter || (e.service === "Other" && e.customNote)));
+    if (serviceFilter !== "all")
+      list = list.filter((e) => e.type === "work" && (e.service === serviceFilter || (e.service === "Other" && e.customNote)));
     return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [entriesWithDaysAgo, dateFilter, statusFilter, serviceFilter]);
 
-  const generateEntryCode = () => {
-    const code = `MB-${String(nextEntryNum).padStart(4, "0")}`;
-    return code;
-  };
-
-  // Calculate payment method statistics
-  const cashPayments = workEntries.filter((e) => e.method === "cash" && e.status === "paid").reduce((sum, e) => sum + e.amount, 0);
-  const onlinePayments = workEntries.filter((e) => e.method === "online" && e.status === "paid").reduce((sum, e) => sum + e.amount, 0);
-
-  // Calculate service-wise earnings
   const serviceEarnings = useMemo(() => {
     const earnings: { [key: string]: number } = {};
-    workEntries.filter((e) => e.status === "paid").forEach((entry) => {
-      const service = entry.service === "Other" ? entry.customNote : entry.service;
-      earnings[service || "Unknown"] = (earnings[service || "Unknown"] || 0) + entry.amount;
-    });
+    workEntries
+      .filter((e) => e.status === "paid")
+      .forEach((entry) => {
+        const service = entry.service === "Other" ? entry.customNote : entry.service;
+        earnings[service || "Unknown"] = (earnings[service || "Unknown"] || 0) + entry.amount;
+      });
     return Object.entries(earnings).sort((a, b) => b[1] - a[1]);
   }, [workEntries]);
 
-  function openNewForm(photo?: string) {
-    setEditingId(null);
-    const f = emptyForm();
-    f.service = services[0] || "Other";
-    f.photo = photo;
-    setForm(f);
-    setShowForm(true);
-  }
+  const generateEntryCode = useCallback(() => {
+    const code = `MB-${String(nextEntryNum).padStart(4, "0")}`;
+    return code;
+  }, [nextEntryNum]);
 
-  function closeForm() {
+  const openNewForm = useCallback(
+    (photo?: string) => {
+      setEditingId(null);
+      const f = emptyForm();
+      f.service = services[0] || "Other";
+      f.photo = photo;
+      setForm(f);
+      setShowForm(true);
+    },
+    [services]
+  );
+
+  const closeForm = useCallback(() => {
     setShowForm(false);
     setEditingId(null);
     setForm(emptyForm());
     setCameraPreview(null);
-  }
+  }, []);
 
-  function handleCameraCapture(e: React.ChangeEvent<HTMLInputElement>) {
+  const handleCameraCapture = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setCameraPreview(reader.result as string);
-    };
-    reader.readAsDataURL(file);
-  }
 
-  function useCapturedPhoto() {
+    // Use requestIdleCallback to not block UI thread
+    requestIdleCallback(() => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setCameraPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    });
+  }, []);
+
+  const useCapturedPhoto = useCallback(() => {
     if (cameraPreview) {
       openNewForm(cameraPreview);
       setCameraPreview(null);
     }
-  }
+  }, [cameraPreview, openNewForm]);
 
-  function saveEntry() {
+  const saveEntry = useCallback(() => {
     const isUndecided = form.entryType === "work" && form.status === "undecided";
     const amount = isUndecided ? 0 : parseFloat(form.amount) || 0;
-    
+
     if (editingId !== null) {
-      setEntries((prev) => prev.map((entry) => {
-        if (entry.id !== editingId) return entry;
-        return {
-          ...entry,
-          type: form.entryType,
-          service: form.entryType === "work" ? form.service : undefined,
-          customNote: form.entryType === "work" && form.service === "Other" ? form.customNote.trim() : undefined,
-          customer: form.entryType === "work" ? form.customer.trim() : undefined,
-          amount,
-          status: form.entryType === "work" ? form.status : undefined,
-          method: form.entryType === "work" && form.status === "paid" ? form.method : undefined,
-          note: form.entryType === "spend" ? form.note.trim() : undefined,
-          photo: form.photo || entry.photo,
-        };
-      }));
+      setEntries((prev) =>
+        prev.map((entry) => {
+          if (entry.id !== editingId) return entry;
+          return {
+            ...entry,
+            type: form.entryType,
+            service: form.entryType === "work" ? form.service : undefined,
+            customNote: form.entryType === "work" && form.service === "Other" ? form.customNote.trim() : undefined,
+            customer: form.entryType === "work" ? form.customer.trim() : undefined,
+            amount,
+            status: form.entryType === "work" ? form.status : undefined,
+            method: form.entryType === "work" && form.status === "paid" ? form.method : undefined,
+            note: form.entryType === "spend" ? form.note.trim() : undefined,
+            photo: form.photo || entry.photo,
+          };
+        })
+      );
     } else {
       const code = generateEntryCode();
       const newEntry: Entry = {
@@ -416,34 +486,39 @@ export default function MBookApp() {
       setNextEntryNum((n) => n + 1);
     }
     closeForm();
-  }
+  }, [editingId, form, generateEntryCode, closeForm]);
 
-  function deleteEntry(id: number) {
-    if (window.confirm(t.deleteConfirm)) setEntries((prev) => prev.filter((entry) => entry.id !== id));
-  }
+  const deleteEntry = useCallback(
+    (id: number) => {
+      if (window.confirm(t.deleteConfirm)) setEntries((prev) => prev.filter((entry) => entry.id !== id));
+    },
+    [t]
+  );
 
-  function editEntry(entry: Entry) {
-    setEditingId(entry.id);
-    setForm({
-      entryType: entry.type,
-      service: entry.service || services[0] || "Other",
-      customNote: entry.customNote || "",
-      customer: entry.customer || "",
-      amount: String(entry.amount || ""),
-      status: entry.status || "undecided",
-      method: entry.method || "cash",
-      note: entry.note || "",
-      photo: entry.photo,
-    });
-    setShowForm(true);
-  }
+  const editEntry = useCallback(
+    (entry: Entry) => {
+      setEditingId(entry.id);
+      setForm({
+        entryType: entry.type,
+        service: entry.service || services[0] || "Other",
+        customNote: entry.customNote || "",
+        customer: entry.customer || "",
+        amount: String(entry.amount || ""),
+        status: entry.status || "undecided",
+        method: entry.method || "cash",
+        note: entry.note || "",
+        photo: entry.photo,
+      });
+      setShowForm(true);
+    },
+    [services]
+  );
 
   const inputClass = "w-full rounded-2xl border border-[#2A2D35] bg-[#0D0F14] p-4 text-sm text-[#F5F5F7] outline-none focus:border-[#E8C468] transition-colors";
 
   return (
     <div className={`min-h-screen bg-[#0D0F14] text-[#F5F5F7] font-sans selection:bg-[#E8C468] selection:text-[#0D0F14]`}>
       <div className="mx-auto max-w-md pb-32 pt-6 px-6">
-        
         <AnimatePresence mode="wait">
           {tab === "home" && (
             <motion.div key="home" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
@@ -457,20 +532,11 @@ export default function MBookApp() {
                 </button>
               </div>
 
-              <div className="rounded-[2.5rem] border border-[#2A2D35] bg-[#181B22] p-8 shadow-2xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-[#E8C468]/5 rounded-full -mr-16 -mt-16 blur-3xl" />
-                <p className="text-xs font-black uppercase tracking-widest text-[#8B8F99]">{t.totalBalance}</p>
-                <h3 className="mb-6 mt-1 font-display text-4xl font-extrabold text-transparent bg-clip-text" style={{ backgroundImage: GOLD_GRADIENT }}>{inr(netProfit)}</h3>
-                <div className="grid grid-cols-3 gap-3">
-                  <div><p className="text-[10px] font-black uppercase text-[#8B8F99]">{t.income}</p><p className="font-bold text-[#4ADE80]">{inr(totalEarned)}</p></div>
-                  <div><p className="text-[10px] font-black uppercase text-[#8B8F99]">{t.expense}</p><p className="font-bold text-[#F87171]">{inr(totalSpend)}</p></div>
-                  <div><p className="text-[10px] font-black uppercase text-[#8B8F99]">{t.unpaid}</p><p className="font-bold text-[#E8C468]">{inr(totalUnpaid)}</p></div>
-                </div>
-              </div>
+              <StatsCard totalBalance={stats.netProfit} income={stats.totalEarned} expense={stats.totalSpend} unpaid={stats.totalUnpaid} t={t} />
 
-              <button 
+              <button
                 onClick={() => cameraInputRef.current?.click()}
-                className="w-full flex items-center justify-center gap-3 rounded-2xl py-5 font-black uppercase tracking-widest text-[#0D0F14] shadow-xl active:scale-95 transition-transform" 
+                className="w-full flex items-center justify-center gap-3 rounded-2xl py-5 font-black uppercase tracking-widest text-[#0D0F14] shadow-xl active:scale-95 transition-transform"
                 style={{ background: GOLD_GRADIENT }}
               >
                 <Camera size={20} /> {t.capture}
@@ -486,32 +552,15 @@ export default function MBookApp() {
                 </div>
                 <div className="space-y-3">
                   {entriesWithDaysAgo.slice(0, 5).map((entry) => (
-                    <div key={entry.id} className="group rounded-2xl border border-[#2A2D35] bg-[#181B22] p-4 flex items-center gap-4">
-                      <div className="h-12 w-12 rounded-xl bg-[#0D0F14] overflow-hidden flex-shrink-0 border border-[#2A2D35]">
-                        {entry.photo ? (
-                          <img src={entry.photo} alt="Entry" className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="h-full w-full flex items-center justify-center text-[#2A2D35]">
-                            <HistoryIcon size={20} />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-0.5">
-                          <p className="text-[10px] font-black text-[#8B8F99] uppercase tracking-tighter">{entry.entryCode}</p>
-                          <p className="text-[10px] font-bold text-[#8B8F99]">{formatDate(entry.date, lang)}</p>
-                        </div>
-                        <p className="font-bold truncate text-sm">
-                          {entry.type === "work" ? (entry.service === "Other" ? entry.customNote : entry.service) : entry.note}
-                        </p>
-                        <p className={`text-sm font-black ${entry.type === "spend" ? "text-[#F87171]" : "text-[#E8C468]"}`}>
-                          {entry.type === "spend" ? "-" : ""}{inr(entry.amount)}
-                        </p>
-                      </div>
-                      <button onClick={() => editEntry(entry)} className="h-10 w-10 flex items-center justify-center rounded-xl bg-[#1F2229] text-[#8B8F99] group-hover:text-[#E8C468] transition-colors">
-                        <ChevronRight size={18} />
-                      </button>
-                    </div>
+                    <EntryCard
+                      key={entry.id}
+                      entry={entry}
+                      lang={lang}
+                      t={t}
+                      onEdit={editEntry}
+                      onDelete={deleteEntry}
+                      onViewPhoto={setShowPhotoViewer}
+                    />
                   ))}
                 </div>
               </div>
@@ -524,18 +573,41 @@ export default function MBookApp() {
                 <h2 className="font-display text-3xl font-extrabold">{t.records}</h2>
                 <div className="mt-4 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                   {(["all", "today", "week", "month"] as DateFilter[]).map((f) => (
-                    <button key={f} onClick={() => setDateFilter(f)} className={`shrink-0 rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-widest transition ${dateFilter === f ? "text-[#0D0F14]" : "border border-[#2A2D35] text-[#8B8F99]"}`} style={dateFilter === f ? { background: GOLD_GRADIENT } : {}}>{t[f]}</button>
+                    <button
+                      key={f}
+                      onClick={() => setDateFilter(f)}
+                      className={`shrink-0 rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-widest transition ${
+                        dateFilter === f ? "bg-[#E8C468] text-[#0D0F14]" : "bg-[#1F2229] text-[#8B8F99]"
+                      }`}
+                    >
+                      {t[f]}
+                    </button>
                   ))}
                 </div>
               </div>
-              
+
               <div className="space-y-4">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-[#8B8F99] mb-2">{t.filterByService}</p>
                   <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                    <button onClick={() => setServiceFilter("all")} className={`shrink-0 rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-widest transition ${serviceFilter === "all" ? "text-[#0D0F14]" : "border border-[#2A2D35] text-[#8B8F99]"}`} style={serviceFilter === "all" ? { background: GOLD_GRADIENT } : {}}>{t.all}</button>
+                    <button
+                      onClick={() => setServiceFilter("all")}
+                      className={`shrink-0 rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-widest transition ${
+                        serviceFilter === "all" ? "bg-[#E8C468] text-[#0D0F14]" : "bg-[#1F2229] text-[#8B8F99]"
+                      }`}
+                    >
+                      {t.all}
+                    </button>
                     {services.map((s) => (
-                      <button key={s} onClick={() => setServiceFilter(s)} className={`shrink-0 rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-widest transition ${serviceFilter === s ? "text-[#0D0F14]" : "border border-[#2A2D35] text-[#8B8F99]"}`} style={serviceFilter === s ? { background: GOLD_GRADIENT } : {}}>{s}</button>
+                      <button
+                        key={s}
+                        onClick={() => setServiceFilter(s)}
+                        className={`shrink-0 rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-widest transition ${
+                          serviceFilter === s ? "bg-[#E8C468] text-[#0D0F14]" : "bg-[#1F2229] text-[#8B8F99]"
+                        }`}
+                      >
+                        {s}
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -543,40 +615,15 @@ export default function MBookApp() {
 
               <div className="space-y-3">
                 {filteredEntries.map((entry) => (
-                  <div key={entry.id} className="rounded-2xl border border-[#2A2D35] bg-[#181B22] p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <p className="text-[10px] font-black text-[#E8C468] uppercase tracking-widest">{entry.entryCode}</p>
-                        <h4 className="font-bold text-lg mt-1">
-                          {entry.type === "work" ? (entry.service === "Other" ? entry.customNote : entry.service) : entry.note}
-                        </h4>
-                        <p className="text-xs text-[#8B8F99] font-medium">{formatDate(entry.date, lang)} • {formatTime(entry.date, lang)}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className={`text-lg font-black ${entry.type === "spend" ? "text-[#F87171]" : "text-[#F5F5F7]"}`}>
-                          {entry.type === "spend" ? "-" : ""}{inr(entry.amount)}
-                        </p>
-                        {entry.status && (
-                          <span className={`text-[10px] font-black uppercase tracking-widest ${entry.status === "paid" ? "text-[#4ADE80]" : entry.status === "unpaid" ? "text-[#F87171]" : "text-[#E8C468]"}`}>
-                            {t[entry.status]}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => editEntry(entry)} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-[#1F2229] py-3 text-[10px] font-black uppercase text-[#8B8F99] hover:text-[#E8C468] transition-colors">
-                        <Edit3 size={14} /> Edit
-                      </button>
-                      {entry.photo && (
-                        <button onClick={() => setShowPhotoViewer(entry.photo!)} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-[#1F2229] py-3 text-[10px] font-black uppercase text-[#8B8F99] hover:text-[#E8C468] transition-colors">
-                          <Eye size={14} /> {t.seePhoto}
-                        </button>
-                      )}
-                      <button onClick={() => deleteEntry(entry.id)} className="w-12 flex items-center justify-center rounded-xl bg-[#F87171]/10 text-[#F87171] py-3 transition-colors hover:bg-[#F87171]/20">
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
+                  <HistoryEntryCard
+                    key={entry.id}
+                    entry={entry}
+                    lang={lang}
+                    t={t}
+                    onEdit={editEntry}
+                    onDelete={deleteEntry}
+                    onViewPhoto={setShowPhotoViewer}
+                  />
                 ))}
               </div>
             </motion.div>
@@ -588,49 +635,8 @@ export default function MBookApp() {
                 <h2 className="font-display text-3xl font-extrabold">{t.analysis}</h2>
               </div>
 
-              <div className="rounded-3xl border border-[#2A2D35] bg-[#181B22] p-6 space-y-4">
-                <h3 className="font-bold text-lg">{t.paymentModes}</h3>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-4 rounded-2xl bg-[#0D0F14]">
-                    <div className="flex items-center gap-3">
-                      <div className="w-3 h-3 rounded-full" style={{ background: "#4ADE80" }}></div>
-                      <span className="text-sm font-medium">{t.cash}</span>
-                    </div>
-                    <span className="font-bold text-[#4ADE80]">{inr(cashPayments)}</span>
-                  </div>
-                  <div className="flex items-center justify-between p-4 rounded-2xl bg-[#0D0F14]">
-                    <div className="flex items-center gap-3">
-                      <div className="w-3 h-3 rounded-full" style={{ background: "#60A5FA" }}></div>
-                      <span className="text-sm font-medium">{t.online}</span>
-                    </div>
-                    <span className="font-bold text-[#60A5FA]">{inr(onlinePayments)}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-3xl border border-[#2A2D35] bg-[#181B22] p-6 space-y-4">
-                <h3 className="font-bold text-lg">{t.servicesShare}</h3>
-                {serviceEarnings.length > 0 ? (
-                  <div className="space-y-3">
-                    {serviceEarnings.map(([service, amount]) => {
-                      const percentage = totalEarned > 0 ? (amount / totalEarned) * 100 : 0;
-                      return (
-                        <div key={service} className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium truncate">{service}</span>
-                            <span className="font-bold text-[#E8C468]">{inr(amount)}</span>
-                          </div>
-                          <div className="w-full h-2 rounded-full bg-[#0D0F14] overflow-hidden">
-                            <div className="h-full" style={{ width: `${percentage}%`, background: GOLD_GRADIENT }}></div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-[#8B8F99] text-sm">{t.noServices}</p>
-                )}
-              </div>
+              <PaymentMethodsSection cashPayments={stats.cashPayments} onlinePayments={stats.onlinePayments} t={t} />
+              <ServiceEarningsSection serviceEarnings={serviceEarnings} totalEarned={stats.totalEarned} t={t} />
             </motion.div>
           )}
 
@@ -645,28 +651,22 @@ export default function MBookApp() {
                   <p className="text-xs font-black uppercase tracking-widest text-[#8B8F99] mb-4">{t.scanToPay}</p>
                   {qrImage && (
                     <div className="rounded-2xl overflow-hidden border border-[#2A2D35] bg-white p-4">
-                      <img src={qrImage} alt="Payment QR" className="w-full h-auto" />
+                      <img src={qrImage} alt="Payment QR" className="w-full h-auto" loading="lazy" />
                     </div>
                   )}
                 </div>
 
                 <div className="space-y-4 border-t border-[#2A2D35] pt-6">
                   <p className="text-xs font-black uppercase tracking-widest text-[#8B8F99]">{t.logPayment}</p>
-                  <input 
-                    type="text" 
-                    placeholder={t.qrCustomerPlaceholder} 
-                    value={qrCustomer} 
-                    onChange={(e) => setQrCustomer(e.target.value)} 
-                    className={inputClass}
-                  />
-                  <input 
-                    type="number" 
-                    placeholder={t.qrAmountPlaceholder} 
-                    value={qrAmount} 
-                    onChange={(e) => setQrAmount(e.target.value)} 
+                  <input type="text" placeholder={t.qrCustomerPlaceholder} value={qrCustomer} onChange={(e) => setQrCustomer(e.target.value)} className={inputClass} />
+                  <input
+                    type="number"
+                    placeholder={t.qrAmountPlaceholder}
+                    value={qrAmount}
+                    onChange={(e) => setQrAmount(e.target.value)}
                     className={`${inputClass} font-display text-xl font-bold`}
                   />
-                  <button 
+                  <button
                     onClick={() => {
                       if (qrAmount && qrCustomer) {
                         const newEntry: Entry = {
@@ -688,7 +688,7 @@ export default function MBookApp() {
                         alert(lang === "en" ? "Payment logged successfully!" : "भुगतान सफलतापूर्वक लॉग किया गया!");
                       }
                     }}
-                    className="w-full rounded-2xl py-4 font-black uppercase tracking-widest text-[#0D0F14] shadow-xl active:scale-95 transition-transform" 
+                    className="w-full rounded-2xl py-4 font-black uppercase tracking-widest text-[#0D0F14] shadow-xl active:scale-95 transition-transform"
                     style={{ background: GOLD_GRADIENT }}
                   >
                     {t.logPayment}
@@ -698,132 +698,42 @@ export default function MBookApp() {
             </motion.div>
           )}
 
-          {tab === "photo-work" && (
-            <motion.div key="photo-work" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} className="space-y-6">
-              <div className="pt-2">
-                <h2 className="font-display text-3xl font-extrabold">{t.photoWork}</h2>
-                <p className="text-[10px] font-black uppercase tracking-widest text-[#8B8F99] mt-2">{t.totalPhotos}: {photoEntries.length}</p>
-              </div>
-
-              <div className="space-y-3">
-                {photoEntries.length > 0 ? (
-                  photoEntries.map((entry) => (
-                    <div key={entry.id} className="rounded-2xl border border-[#2A2D35] bg-[#181B22] overflow-hidden">
-                      {entry.photo && (
-                        <div className="relative group">
-                          <img src={entry.photo} alt="Work" className="w-full h-48 object-cover" />
-                          <button onClick={() => setShowPhotoViewer(entry.photo!)} className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Eye size={32} className="text-white" />
-                          </button>
-                        </div>
-                      )}
-                      <div className="p-4">
-                        <p className="text-[10px] font-black text-[#E8C468] uppercase tracking-widest">{entry.entryCode}</p>
-                        <h4 className="font-bold text-lg mt-1">
-                          {entry.service === "Other" ? entry.customNote : entry.service}
-                        </h4>
-                        <p className="text-xs text-[#8B8F99] font-medium mt-1">{formatDate(entry.date, lang)} • {formatTime(entry.date, lang)}</p>
-                        <div className="flex items-center justify-between mt-3">
-                          <p className="text-sm font-black text-[#E8C468]">{inr(entry.amount)}</p>
-                          {entry.status && (
-                            <span className={`text-[10px] font-black uppercase tracking-widest ${entry.status === "paid" ? "text-[#4ADE80]" : entry.status === "unpaid" ? "text-[#F87171]" : "text-[#E8C468]"}`}>
-                              {t[entry.status]}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex gap-2 mt-4">
-                          <button onClick={() => editEntry(entry)} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-[#1F2229] py-2 text-[10px] font-black uppercase text-[#8B8F99] hover:text-[#E8C468] transition-colors">
-                            <Edit3 size={14} /> Edit
-                          </button>
-                          <button onClick={() => deleteEntry(entry.id)} className="w-12 flex items-center justify-center rounded-xl bg-[#F87171]/10 text-[#F87171] py-2 transition-colors hover:bg-[#F87171]/20">
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center py-12">
-                    <Camera size={48} className="mx-auto text-[#2A2D35] mb-4" />
-                    <p className="text-[#8B8F99]">{t.noPhoto}</p>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          )}
-
           {tab === "settings" && (
             <motion.div key="settings" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="space-y-6">
-              <div className="pt-2"><h2 className="font-display text-3xl font-extrabold">{t.settings}</h2></div>
-              
+              <div className="pt-2">
+                <h2 className="font-display text-3xl font-extrabold">{t.settings}</h2>
+              </div>
+
               <div className="rounded-3xl border border-[#2A2D35] bg-[#181B22] p-2">
                 <div className="flex items-center justify-between p-4">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1F2229] text-[#8B8F99]"><Languages size={20} /></span>
-                    <span className="text-sm font-bold">{t.language}</span>
-                  </div>
+                  <span className="text-sm font-bold">{t.language}</span>
                   <div className="flex gap-1 bg-[#0D0F14] p-1 rounded-xl">
-                    <button onClick={() => setLang("en")} className={`px-3 py-1.5 text-[10px] font-black rounded-lg transition ${lang === "en" ? "text-[#0D0F14]" : "text-[#8B8F99]"}`} style={lang === "en" ? { background: GOLD_GRADIENT } : {}}>EN</button>
-                    <button onClick={() => setLang("hi")} className={`px-3 py-1.5 text-[10px] font-black rounded-lg transition ${lang === "hi" ? "text-[#0D0F14]" : "text-[#8B8F99]"}`} style={lang === "hi" ? { background: GOLD_GRADIENT } : {}}>HI</button>
+                    <button
+                      onClick={() => setLang("en")}
+                      className={`px-3 py-1.5 text-[10px] font-black rounded-lg transition ${lang === "en" ? "bg-[#E8C468] text-[#0D0F14]" : "text-[#8B8F99]"}`}
+                    >
+                      EN
+                    </button>
+                    <button
+                      onClick={() => setLang("hi")}
+                      className={`px-3 py-1.5 text-[10px] font-black rounded-lg transition ${lang === "hi" ? "bg-[#E8C468] text-[#0D0F14]" : "text-[#8B8F99]"}`}
+                    >
+                      HI
+                    </button>
                   </div>
                 </div>
-                <button onClick={() => setShowManageServices(true)} className="flex w-full items-center justify-between rounded-2xl p-4 hover:bg-[#1F2229]">
-                  <span className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1F2229] text-[#8B8F99]"><Edit3 size={18} /></span>
-                    <span className="text-sm font-bold">{t.manageServices}</span>
-                  </span>
-                  <ChevronRight size={18} className="text-[#8B8F99]" />
-                </button>
               </div>
 
-              <div className="rounded-3xl border border-[#2A2D35] bg-[#181B22] p-2">
-                <div className="flex items-center justify-between p-4"><div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1F2229] text-[#8B8F99]"><BarChart3 size={20} /></span><span className="text-sm font-bold">{t.darkAppearance}</span></div><button type="button" onClick={toggleTheme || (() => {})} className={`relative h-6 w-12 rounded-full ${theme === "dark" ? "" : "bg-[#1F2229]"}`} style={theme === "dark" ? { background: GOLD_GRADIENT } : undefined}><motion.span animate={{ x: theme === "dark" ? 24 : 2 }} className="absolute left-0 top-1 h-4 w-4 rounded-full bg-white" /></button></div>
-                <button type="button" onClick={() => fileInputRef.current?.click()} className="flex w-full items-center justify-between rounded-2xl p-4 hover:bg-[#1F2229]"><span className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1F2229] text-[#8B8F99]"><Upload size={18} /></span><span className="text-sm font-bold">{t.updateQr}</span></span><ChevronRight size={18} className="text-[#8B8F99]" /></button>
-                <input ref={fileInputRef} type="file" accept="image/*" onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    const reader = new FileReader();
-                    reader.onload = () => setQrImage(reader.result as string);
-                    reader.readAsDataURL(file);
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm(t.clearConfirm)) {
+                    setEntries([]);
+                    setNextEntryNum(1);
                   }
-                }} className="hidden" />
-              </div>
-
-              <div className="rounded-3xl border border-[#2A2D35] bg-[#181B22] p-2">
-                <button type="button" onClick={() => {
-                  const backup = { app: "Mbook", exportedAt: new Date().toISOString(), entries, qrImage, services, nextEntryNum };
-                  const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" }));
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = `mbook_backup_${new Date().toISOString().split("T")[0]}.json`;
-                  a.click();
-                }} className="flex w-full items-center justify-between rounded-2xl p-4 hover:bg-[#1F2229]"><span className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1F2229] text-[#8B8F99]"><Download size={18} /></span><span className="text-sm font-bold">{t.export}</span></span><ChevronRight size={18} className="text-[#8B8F99]" /></button>
-                <button type="button" onClick={() => setShowImport(!showImport)} className="flex w-full items-center justify-between rounded-2xl p-4 hover:bg-[#1F2229]"><span className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1F2229] text-[#8B8F99]"><PieChart size={18} /></span><span className="text-sm font-bold">{t.import}</span></span><ChevronRight size={18} className="text-[#8B8F99]" /></button>
-              </div>
-
-              {showImport && (
-                <div className="space-y-3 rounded-3xl border border-[#2A2D35] bg-[#181B22] p-4">
-                  <textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder={t.backupPlaceholder} className="h-32 w-full rounded-2xl border border-[#2A2D35] bg-[#0D0F14] p-4 font-mono text-xs text-[#F5F5F7] outline-none" />
-                  <button type="button" onClick={() => {
-                    try {
-                      const parsed = JSON.parse(importText);
-                      if (parsed.entries) setEntries(parsed.entries);
-                      if (parsed.qrImage) setQrImage(parsed.qrImage);
-                      if (parsed.services) setServices(parsed.services);
-                      if (parsed.nextEntryNum) setNextEntryNum(parsed.nextEntryNum);
-                      setShowImport(false);
-                      setImportText("");
-                    } catch { alert("Invalid JSON"); }
-                  }} className="w-full rounded-2xl py-3 text-sm font-black text-[#0D0F14]" style={{ background: GOLD_GRADIENT }}>{t.restoreBackup}</button>
-                </div>
-              )}
-
-              <button type="button" onClick={() => {
-                if (window.confirm(t.clearConfirm)) {
-                  setEntries([]);
-                  setNextEntryNum(1);
-                }
-              }} className="flex w-full items-center gap-3 rounded-3xl border border-[#F87171]/20 bg-[#F87171]/5 p-4 text-sm font-bold text-[#F87171] hover:bg-[#F87171]/10 transition-colors">
+                }}
+                className="flex w-full items-center gap-3 rounded-3xl border border-[#F87171]/20 bg-[#F87171]/5 p-4 text-sm font-bold text-[#F87171] hover:bg-[#F87171]/10 transition-colors"
+              >
                 <Trash2 size={18} /> {t.clearAll}
               </button>
             </motion.div>
@@ -858,67 +768,144 @@ export default function MBookApp() {
           {showForm && (
             <div className="fixed inset-0 z-50 flex items-end justify-center sm:absolute">
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeForm} className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
-              <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 25, stiffness: 200 }} className="relative z-10 max-h-[90%] w-full max-w-md overflow-y-auto rounded-t-[2.5rem] border-t border-[#2A2D35] bg-[#181B22] p-8 shadow-2xl">
-                <div className="mx-auto mb-8 h-1.5 w-12 rounded-full bg-[#2A2D35]" />
-                <div className="mb-8 flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-[10px] font-black text-[#E8C468] uppercase tracking-widest mb-1">{editingId ? t.entryCode : generateEntryCode()}</p>
+              <motion.div
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
+                transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                className="relative z-10 max-h-[90%] w-full rounded-t-3xl border border-[#2A2D35] border-b-0 bg-[#181B22] overflow-y-auto"
+              >
+                <div className="p-6 space-y-4">
+                  <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-[#2A2D35]" />
+                  <div className="flex items-start justify-between gap-4">
                     <h2 className="font-display text-2xl font-extrabold">{editingId ? t.editRecord : t.newRecord}</h2>
-                  </div>
-                  <button onClick={closeForm} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1F2229] text-[#8B8F99]"><X size={20} /></button>
-                </div>
-
-                {form.photo && (
-                  <div className="mb-6 relative group">
-                    <img src={form.photo} alt="Attached" className="w-full h-48 object-cover rounded-2xl border border-[#2A2D35]" />
-                    <button onClick={() => setForm(f => ({...f, photo: undefined}))} className="absolute top-2 right-2 h-8 w-8 flex items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity">
-                      <X size={16} />
+                    <button onClick={closeForm} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1F2229] text-[#8B8F99]">
+                      <X size={20} />
                     </button>
                   </div>
-                )}
 
-                <div className="mb-6 flex gap-2 rounded-2xl bg-[#0D0F14] p-1">
-                  <button onClick={() => setForm((f) => ({ ...f, entryType: "work" }))} className={`flex-1 rounded-xl py-3 text-xs font-black uppercase transition ${form.entryType === "work" ? "text-[#0D0F14]" : "text-[#8B8F99]"}`} style={form.entryType === "work" ? { background: GOLD_GRADIENT } : undefined}>{t.work}</button>
-                  <button onClick={() => setForm((f) => ({ ...f, entryType: "spend" }))} className={`flex-1 rounded-xl py-3 text-xs font-black uppercase transition ${form.entryType === "spend" ? "bg-[#F87171] text-white" : "text-[#8B8F99]"}`}>{t.spend}</button>
-                </div>
-
-                <div className="space-y-4">
-                  {form.entryType === "work" ? (
-                    <>
-                      <select value={form.service} onChange={(e) => setForm((f) => ({ ...f, service: e.target.value }))} className={inputClass}>
-                        {services.map((s) => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                      {form.service === "Other" && <input value={form.customNote} onChange={(e) => setForm((f) => ({ ...f, customNote: e.target.value }))} placeholder={t.describeService} className={inputClass} />}
-                      <input value={form.customer} onChange={(e) => setForm((f) => ({ ...f, customer: e.target.value }))} placeholder={t.customer} className={inputClass} />
-                      <div>
-                        <p className="mb-2 ml-1 text-[10px] font-black uppercase tracking-widest text-[#8B8F99]">{t.status}</p>
-                        <div className="flex gap-2">
-                          {(["undecided", "unpaid", "paid"] as EntryStatus[]).map((status) => (
-                            <button key={status} onClick={() => setForm(f => ({...f, status, amount: status === "undecided" ? "0" : f.amount}))} className={`flex-1 rounded-xl border py-3 text-[10px] font-black uppercase transition ${form.status === status ? status === "paid" ? "border-[#4ADE80] bg-[#4ADE80] text-[#0D0F14]" : status === "unpaid" ? "border-[#F87171] bg-[#F87171] text-white" : "border-[#E8C468] text-[#0D0F14]" : "border-[#2A2D35] bg-[#0D0F14] text-[#8B8F99]"}`} style={form.status === status && status === "undecided" ? { background: GOLD_GRADIENT } : undefined}>{t[status]}</button>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <p className="mb-2 ml-1 text-[10px] font-black uppercase tracking-widest text-[#8B8F99]">{t.amount}</p>
-                        <input type="number" value={form.status === "undecided" ? "0" : form.amount} disabled={form.status === "undecided"} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} placeholder="₹0" className={`${inputClass} font-display text-xl font-bold ${form.status === "undecided" ? "opacity-50 cursor-not-allowed" : ""}`} />
-                        {form.status === "undecided" && <p className="ml-1 mt-1 text-[11px] text-[#8B8F99]">{t.undecidedHelp}</p>}
-                      </div>
-                      {form.status === "paid" && (
-                        <div className="flex gap-2">
-                          {(["cash", "online"] as PaymentMethod[]).map((method) => (
-                            <button key={method} onClick={() => setForm((f) => ({ ...f, method }))} className={`flex-1 rounded-xl border py-3 text-[10px] font-black uppercase transition ${form.method === method ? "border-[#8B8F99]/40 bg-[#1F2229] text-[#F5F5F7]" : "border-[#2A2D35] bg-[#0D0F14] text-[#8B8F99]"}`}>{t[method]}</button>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <input value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} placeholder={t.whatSpentOn} className={inputClass} />
-                      <input type="number" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} placeholder="₹0" className={`${inputClass} font-display text-xl font-bold`} />
-                    </>
+                  {form.photo && (
+                    <div className="relative group">
+                      <img src={form.photo} alt="Attached" className="w-full h-48 object-cover rounded-2xl border border-[#2A2D35]" />
+                      <button
+                        onClick={() => setForm((f) => ({ ...f, photo: undefined }))}
+                        className="absolute top-2 right-2 h-8 w-8 flex items-center justify-center rounded-full bg-black/50 text-white"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
                   )}
+
+                  <div className="flex gap-2 rounded-2xl bg-[#0D0F14] p-1">
+                    <button
+                      onClick={() => setForm((f) => ({ ...f, entryType: "work" }))}
+                      className={`flex-1 rounded-xl py-3 text-xs font-black uppercase transition ${form.entryType === "work" ? "bg-[#E8C468] text-[#0D0F14]" : "text-[#8B8F99]"}`}
+                    >
+                      {t.work}
+                    </button>
+                    <button
+                      onClick={() => setForm((f) => ({ ...f, entryType: "spend" }))}
+                      className={`flex-1 rounded-xl py-3 text-xs font-black uppercase transition ${form.entryType === "spend" ? "bg-[#E8C468] text-[#0D0F14]" : "text-[#8B8F99]"}`}
+                    >
+                      {t.spend}
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    {form.entryType === "work" ? (
+                      <>
+                        <select value={form.service} onChange={(e) => setForm((f) => ({ ...f, service: e.target.value }))} className={inputClass}>
+                          {services.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </select>
+                        {form.service === "Other" && (
+                          <input
+                            value={form.customNote}
+                            onChange={(e) => setForm((f) => ({ ...f, customNote: e.target.value }))}
+                            placeholder={t.describeService}
+                            className={inputClass}
+                          />
+                        )}
+                        <input
+                          value={form.customer}
+                          onChange={(e) => setForm((f) => ({ ...f, customer: e.target.value }))}
+                          placeholder={t.customer}
+                          className={inputClass}
+                        />
+                        <div>
+                          <p className="mb-2 ml-1 text-[10px] font-black uppercase tracking-widest text-[#8B8F99]">{t.status}</p>
+                          <div className="flex gap-2">
+                            {(["undecided", "unpaid", "paid"] as EntryStatus[]).map((status) => (
+                              <button
+                                key={status}
+                                onClick={() => setForm((f) => ({ ...f, status, amount: status === "undecided" ? "0" : f.amount }))}
+                                className={`flex-1 rounded-xl border py-3 text-[10px] font-black uppercase transition ${
+                                  form.status === status
+                                    ? "border-[#E8C468] bg-[#E8C468]/10 text-[#E8C468]"
+                                    : "border-[#2A2D35] text-[#8B8F99]"
+                                }`}
+                              >
+                                {t[status]}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="mb-2 ml-1 text-[10px] font-black uppercase tracking-widest text-[#8B8F99]">{t.amount}</p>
+                          <input
+                            type="number"
+                            value={form.status === "undecided" ? "0" : form.amount}
+                            disabled={form.status === "undecided"}
+                            onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+                            className={inputClass}
+                          />
+                          {form.status === "undecided" && <p className="ml-1 mt-1 text-[11px] text-[#8B8F99]">{t.undecidedHelp}</p>}
+                        </div>
+                        {form.status === "paid" && (
+                          <div className="flex gap-2">
+                            {(["cash", "online"] as PaymentMethod[]).map((method) => (
+                              <button
+                                key={method}
+                                onClick={() => setForm((f) => ({ ...f, method }))}
+                                className={`flex-1 rounded-xl border py-3 text-[10px] font-black uppercase transition ${
+                                  form.method === method ? "border-[#E8C468] bg-[#E8C468]/10 text-[#E8C468]" : "border-[#2A2D35] text-[#8B8F99]"
+                                }`}
+                              >
+                                {t[method]}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <input
+                          value={form.note}
+                          onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+                          placeholder={t.whatSpentOn}
+                          className={inputClass}
+                        />
+                        <input
+                          type="number"
+                          value={form.amount}
+                          onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+                          placeholder="₹0"
+                          className={`${inputClass} font-display text-xl font-bold`}
+                        />
+                      </>
+                    )}
+                  </div>
+                  <button
+                    onClick={saveEntry}
+                    className="w-full rounded-2xl py-5 font-black uppercase tracking-widest text-[#0D0F14] shadow-xl active:scale-95 transition-transform"
+                    style={{ background: GOLD_GRADIENT }}
+                  >
+                    {t.save}
+                  </button>
                 </div>
-                <button onClick={saveEntry} className="mt-8 w-full rounded-2xl py-5 font-black uppercase tracking-widest text-[#0D0F14] shadow-xl active:scale-95 transition-transform" style={{ background: GOLD_GRADIENT }}>{editingId ? t.saveChanges : t.save}</button>
               </motion.div>
             </div>
           )}
@@ -929,10 +916,17 @@ export default function MBookApp() {
                 <img src={cameraPreview} alt="Preview" className="max-w-full max-h-full rounded-3xl border border-[#2A2D35] object-contain" />
               </div>
               <div className="p-8 bg-[#0D0F14] border-t border-[#2A2D35] flex gap-4">
-                <button onClick={() => setCameraPreview(null)} className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-[#1F2229] py-5 font-black uppercase tracking-widest text-[#8B8F99]">
+                <button
+                  onClick={() => setCameraPreview(null)}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-[#1F2229] py-5 font-black uppercase tracking-widest text-[#8B8F99]"
+                >
                   <RotateCcw size={18} /> {t.retake}
                 </button>
-                <button onClick={useCapturedPhoto} className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-5 font-black uppercase tracking-widest text-[#0D0F14]" style={{ background: GOLD_GRADIENT }}>
+                <button
+                  onClick={useCapturedPhoto}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-5 font-black uppercase tracking-widest text-[#0D0F14]"
+                  style={{ background: GOLD_GRADIENT }}
+                >
                   <Check size={18} /> {t.usePhoto}
                 </button>
               </div>
@@ -949,35 +943,6 @@ export default function MBookApp() {
               <div className="flex-1 flex items-center justify-center p-6">
                 <img src={showPhotoViewer} alt="Full view" className="max-w-full max-h-full object-contain rounded-2xl" />
               </div>
-            </div>
-          )}
-
-          {showManageServices && (
-            <div className="fixed inset-0 z-[80] flex items-center justify-center p-6">
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowManageServices(false)} className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
-              <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="relative z-10 w-full max-w-sm rounded-3xl border border-[#2A2D35] bg-[#181B22] p-6 shadow-2xl">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="font-display text-xl font-bold">{t.manageServices}</h3>
-                  <button onClick={() => setShowManageServices(false)} className="text-[#8B8F99]"><X size={20} /></button>
-                </div>
-                <div className="space-y-3 max-h-60 overflow-y-auto mb-6 pr-2 scrollbar-hide">
-                  {services.map((s, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-[#0D0F14] border border-[#2A2D35]">
-                      <span className="text-sm font-medium">{s}</span>
-                      <button onClick={() => setServices(services.filter((_, i) => i !== idx))} className="text-[#F87171] p-1"><Trash2 size={16} /></button>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <input value={newServiceName} onChange={(e) => setNewServiceName(e.target.value)} placeholder="Service Name" className={inputClass} />
-                  <button onClick={() => {
-                    if (newServiceName.trim()) {
-                      setServices([...services, newServiceName.trim()]);
-                      setNewServiceName("");
-                    }
-                  }} className="w-12 h-12 flex items-center justify-center rounded-2xl text-[#0D0F14] shrink-0" style={{ background: GOLD_GRADIENT }}><Plus size={24} /></button>
-                </div>
-              </motion.div>
             </div>
           )}
         </AnimatePresence>
