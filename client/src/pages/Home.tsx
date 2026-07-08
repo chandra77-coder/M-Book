@@ -704,7 +704,15 @@ export default function MBookApp() {
                 <h2 className="font-display text-3xl font-extrabold">{t.settings}</h2>
               </div>
 
-              <div className="rounded-3xl border border-[#2A2D35] bg-[#181B22] p-2">
+              <div className="flex items-center gap-4 mb-2">
+                <img src="/mbook-logo.png" alt="M-Book Logo" className="w-16 h-16 rounded-2xl border border-[#2A2D35]" />
+                <div>
+                  <h1 className="font-display text-2xl font-extrabold tracking-tight">M-Book</h1>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[#8B8F99]">Premium Work Ledger</p>
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-[#2A2D35] bg-[#181B22] p-2 space-y-1">
                 <div className="flex items-center justify-between p-4">
                   <span className="text-sm font-bold">{t.language}</span>
                   <div className="flex gap-1 bg-[#0D0F14] p-1 rounded-xl">
@@ -721,6 +729,16 @@ export default function MBookApp() {
                       HI
                     </button>
                   </div>
+                </div>
+                
+                <div className="flex items-center justify-between p-4 border-t border-[#2A2D35]">
+                  <span className="text-sm font-bold">{t.darkAppearance}</span>
+                  <button 
+                    onClick={toggleTheme}
+                    className={`w-12 h-6 rounded-full p-1 transition-colors ${theme === 'dark' ? 'bg-[#E8C468]' : 'bg-[#2A2D35]'}`}
+                  >
+                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${theme === 'dark' ? 'translate-x-6' : 'translate-x-0'}`} />
+                  </button>
                 </div>
               </div>
 
