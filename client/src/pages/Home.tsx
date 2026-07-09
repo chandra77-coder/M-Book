@@ -31,7 +31,7 @@ import {
   debounce,
 } from "@/utils/helpers";
 
-type EntryType = "work" | "spend";
+type EntryType = "work" | "spend" | "transfer";
 type EntryStatus = "paid" | "unpaid" | "undecided";
 type PaymentMethod = "cash" | "online";
 type DateFilter = "all" | "today" | "week" | "month";
@@ -88,6 +88,9 @@ const TRANSLATIONS = {
     note: "Note",
     save: "Confirm Entry",
     saveChanges: "Save Changes",
+    transfer: "Transfer",
+    from: "From",
+    to: "To",
     capture: "Capture Photo Entry",
     usePhoto: "Use Photo",
     retake: "Retake",
@@ -153,6 +156,9 @@ const TRANSLATIONS = {
     note: "नोट",
     save: "एंट्री पक्की करें",
     saveChanges: "बदलाव सहेजें",
+    transfer: "ट्रांसफर",
+    from: "कहाँ से",
+    to: "कहाँ को",
     capture: "फोटो एंट्री लें",
     usePhoto: "फोटो का उपयोग करें",
     retake: "फिर से लें",
@@ -373,6 +379,7 @@ export default function MBookApp() {
 
   const workEntries = useMemo(() => entriesWithDaysAgo.filter((e) => e.type === "work"), [entriesWithDaysAgo]);
   const spendEntries = useMemo(() => entriesWithDaysAgo.filter((e) => e.type === "spend"), [entriesWithDaysAgo]);
+  const transferEntries = useMemo(() => entriesWithDaysAgo.filter((e) => e.type === "transfer"), [entriesWithDaysAgo]);
   const photoEntries = useMemo(() => workEntries.filter((e) => e.photo), [workEntries]);
 
   const stats = useMemo(() => calculateStats(workEntries, spendEntries), [workEntries, spendEntries]);
@@ -827,6 +834,12 @@ export default function MBookApp() {
                     >
                       {t.spend}
                     </button>
+                    <button
+                      onClick={() => setForm((f) => ({ ...f, entryType: "transfer" }))}
+                      className={`flex-1 rounded-xl py-3 text-xs font-black uppercase transition ${form.entryType === "transfer" ? "bg-[#E8C468] text-[#0D0F14]" : "text-[#8B8F99]"}`}
+                    >
+                      {t.transfer}
+                    </button>
                   </div>
 
                   <div className="space-y-4">
@@ -898,7 +911,7 @@ export default function MBookApp() {
                           </div>
                         )}
                       </>
-                    ) : (
+                    ) : form.entryType === "spend" ? (
                       <>
                         <input
                           value={form.note}
@@ -906,6 +919,30 @@ export default function MBookApp() {
                           placeholder={t.whatSpentOn}
                           className={inputClass}
                         />
+                        <input
+                          type="number"
+                          value={form.amount}
+                          onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+                          placeholder="₹0"
+                          className={`${inputClass} font-display text-xl font-bold`}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex gap-2">
+                          <input
+                            value={form.customer}
+                            onChange={(e) => setForm((f) => ({ ...f, customer: e.target.value }))}
+                            placeholder={t.from}
+                            className={`flex-1 ${inputClass}`}
+                          />
+                          <input
+                            value={form.note}
+                            onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+                            placeholder={t.to}
+                            className={`flex-1 ${inputClass}`}
+                          />
+                        </div>
                         <input
                           type="number"
                           value={form.amount}

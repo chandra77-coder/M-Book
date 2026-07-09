@@ -4,7 +4,7 @@ import { Edit3, Eye, Trash2, History as HistoryIcon } from "lucide-react";
 interface Entry {
   id: number;
   entryCode: string;
-  type: "work" | "spend";
+  type: "work" | "spend" | "transfer";
   service?: string;
   customNote?: string;
   customer?: string;
@@ -57,9 +57,9 @@ export const EntryCard = React.memo(
           <p className="text-[10px] font-bold text-[#8B8F99]">{formatDate(entry.date, lang)}</p>
         </div>
         <p className="font-bold truncate text-sm">
-          {entry.type === "work" ? (entry.service === "Other" ? entry.customNote : entry.service) : entry.note}
+          {entry.type === "work" ? (entry.service === "Other" ? entry.customNote : entry.service) : entry.type === "spend" ? entry.note : `${entry.customer} → ${entry.note}`}
         </p>
-        <p className={`text-sm font-black ${entry.type === "spend" ? "text-[#F87171]" : "text-[#E8C468]"}`}>
+        <p className={`text-sm font-black ${entry.type === "spend" ? "text-[#F87171]" : entry.type === "transfer" ? "text-[#60A5FA]" : "text-[#E8C468]"}`}>
           {entry.type === "spend" ? "-" : ""}{inr(entry.amount)}
         </p>
       </div>
@@ -89,14 +89,14 @@ export const HistoryEntryCard = React.memo(
         <div>
           <p className="text-[10px] font-black text-[#E8C468] uppercase tracking-widest">{entry.entryCode}</p>
           <h4 className="font-bold text-lg mt-1">
-            {entry.type === "work" ? (entry.service === "Other" ? entry.customNote : entry.service) : entry.note}
+            {entry.type === "work" ? (entry.service === "Other" ? entry.customNote : entry.service) : entry.type === "spend" ? entry.note : `${entry.customer} → ${entry.note}`}
           </h4>
           <p className="text-xs text-[#8B8F99] font-medium">
             {formatDate(entry.date, lang)} • {formatTime(entry.date, lang)}
           </p>
         </div>
         <div className="text-right">
-          <p className={`text-lg font-black ${entry.type === "spend" ? "text-[#F87171]" : "text-[#F5F5F7]"}`}>
+          <p className={`text-lg font-black ${entry.type === "spend" ? "text-[#F87171]" : entry.type === "transfer" ? "text-[#60A5FA]" : "text-[#F5F5F7]"}`}>
             {entry.type === "spend" ? "-" : ""}{inr(entry.amount)}
           </p>
           {entry.status && (
