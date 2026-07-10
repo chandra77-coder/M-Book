@@ -25,7 +25,7 @@ export const formatTime = (date: string, lang: "en" | "hi"): string => {
 export const inr = (n: number): string => `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 
 // Memoized calculations to prevent recalculation
-export const calculateStats = (workEntries: any[], spendEntries: any[]) => {
+export const calculateStats = (workEntries: any[], spendEntries: any[], transferEntries: any[]) => {
   const totalEarned = workEntries
     .filter((e) => e.status === "paid")
     .reduce((sum, e) => sum + e.amount, 0);
@@ -33,13 +33,18 @@ export const calculateStats = (workEntries: any[], spendEntries: any[]) => {
     .filter((e) => e.status === "unpaid")
     .reduce((sum, e) => sum + e.amount, 0);
   const totalSpend = spendEntries.reduce((sum, e) => sum + e.amount, 0);
+  
+  // Total Balance (Net Profit) should be Income - Expense
   const netProfit = totalEarned - totalSpend;
+  
   const cashPayments = workEntries
     .filter((e) => e.method === "cash" && e.status === "paid")
     .reduce((sum, e) => sum + e.amount, 0);
   const onlinePayments = workEntries
     .filter((e) => e.method === "online" && e.status === "paid")
     .reduce((sum, e) => sum + e.amount, 0);
+  
+  const totalTransferred = transferEntries.reduce((sum, e) => sum + e.amount, 0);
 
   return {
     totalEarned,
@@ -48,6 +53,7 @@ export const calculateStats = (workEntries: any[], spendEntries: any[]) => {
     netProfit,
     cashPayments,
     onlinePayments,
+    totalTransferred,
   };
 };
 

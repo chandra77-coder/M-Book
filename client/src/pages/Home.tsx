@@ -382,7 +382,7 @@ export default function MBookApp() {
   const transferEntries = useMemo(() => entriesWithDaysAgo.filter((e) => e.type === "transfer"), [entriesWithDaysAgo]);
   const photoEntries = useMemo(() => workEntries.filter((e) => e.photo), [workEntries]);
 
-  const stats = useMemo(() => calculateStats(workEntries, spendEntries), [workEntries, spendEntries]);
+  const stats = useMemo(() => calculateStats(workEntries, spendEntries, transferEntries), [workEntries, spendEntries, transferEntries]);
 
   const filteredEntries = useMemo(() => {
     let list = [...entriesWithDaysAgo];
