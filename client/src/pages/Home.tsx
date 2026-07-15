@@ -18,6 +18,7 @@ import {
   Languages,
   Check,
   RotateCcw,
+  ImagePlus,
 } from "lucide-react";
 import { EntryCard, HistoryEntryCard } from "@/components/EntryCard";
 import {
@@ -329,6 +330,7 @@ export default function MBookApp() {
   const [showPhotoViewer, setShowPhotoViewer] = useState<string | null>(null);
   const [showManageServices, setShowManageServices] = useState(false);
   const [newServiceName, setNewServiceName] = useState("");
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const t = TRANSLATIONS[lang];
 
@@ -809,17 +811,47 @@ export default function MBookApp() {
                     </button>
                   </div>
 
-                  {form.photo && (
-                    <div className="relative group">
-                      <img src={form.photo} alt="Attached" className="w-full h-48 object-cover rounded-2xl border border-[#2A2D35]" />
+                  {/* Photo Display Section */}
+                  <div className="rounded-2xl border border-[#2A2D35] bg-[#0D0F14] p-4 overflow-hidden">
+                    {form.photo ? (
+                      <div className="relative group">
+                        <img src={form.photo} alt="Attached" className="w-full h-48 object-cover rounded-xl" />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors rounded-xl flex items-center justify-center gap-3">
+                          <button
+                            onClick={() => photoInputRef.current?.click()}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity h-10 w-10 flex items-center justify-center rounded-full bg-[#E8C468] text-[#0D0F14] hover:bg-[#E8C468]/90"
+                            title={t.capture}
+                          >
+                            <Camera size={18} />
+                          </button>
+                          <button
+                            onClick={() => setForm((f) => ({ ...f, photo: undefined }))}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity h-10 w-10 flex items-center justify-center rounded-full bg-[#F87171] text-white hover:bg-[#F87171]/90"
+                            title="Remove photo"
+                          >
+                            <X size={18} />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
                       <button
-                        onClick={() => setForm((f) => ({ ...f, photo: undefined }))}
-                        className="absolute top-2 right-2 h-8 w-8 flex items-center justify-center rounded-full bg-black/50 text-white"
+                        onClick={() => photoInputRef.current?.click()}
+                        className="w-full h-32 flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-[#2A2D35] hover:border-[#E8C468] hover:bg-[#E8C468]/5 transition-all"
                       >
-                        <X size={16} />
+                        <ImagePlus size={32} className="text-[#8B8F99] group-hover:text-[#E8C468]" />
+                        <span className="text-sm font-bold text-[#8B8F99]">{t.capture}</span>
                       </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
+                  <input ref={photoInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      setForm((f) => ({ ...f, photo: reader.result as string }));
+                    };
+                    reader.readAsDataURL(file);
+                  }} />
 
                   <div className="flex gap-2 rounded-2xl bg-[#0D0F14] p-1">
                     <button
