@@ -321,6 +321,11 @@ export default function MBookApp() {
 
   const t = TRANSLATIONS[lang];
 
+  const normalizeService = useCallback((value?: string) => {
+    const trimmed = value?.trim() || "";
+    return trimmed || services[0] || "Other";
+  }, [services]);
+
   const [form, setForm] = useState<EntryForm>(() => {
     const f = emptyForm();
     f.service = services[0] || "Other";
@@ -408,12 +413,12 @@ export default function MBookApp() {
     (photo?: string) => {
       setEditingId(null);
       const f = emptyForm();
-      f.service = services[0] || "Other";
+      f.service = normalizeService(services[0]);
       f.photo = photo;
       setForm(f);
       setShowForm(true);
     },
-    [services]
+    [normalizeService, services]
   );
 
   const closeForm = useCallback(() => {
@@ -444,13 +449,20 @@ export default function MBookApp() {
   }, [cameraPreview, openNewForm]);
 
   const saveEntry = useCallback(() => {
+    const normalizedService = normalizeService(form.service);
+    const customServiceName = form.service === "Other" ? form.customNote.trim() : "";
+
     if (form.entryType === "work") {
-      if (form.customer.trim() === "") {
-        alert("Customer name is required");
+      if (form.service === "Other" && customServiceName === "") {
+        alert("Please enter a category name for Other");
         return;
       }
-      if (form.service.trim() === "") {
-        alert("Please select a service");
+      if (normalizedService.trim() === "") {
+        alert("Please select a category first");
+        return;
+      }
+      if (form.customer.trim() === "") {
+        alert("Customer name is required");
         return;
       }
       if (form.status === "paid" || form.status === "unpaid") {
@@ -468,6 +480,8 @@ export default function MBookApp() {
 
     const isUndecided = form.entryType === "work" && form.status === "undecided";
     const amount = isUndecided ? 0 : parseFloat(form.amount) || 0;
+    const finalService = form.entryType === "work" ? normalizedService : undefined;
+    const finalCustomNote = form.entryType === "work" && form.service === "Other" ? customServiceName : undefined;
 
     if (editingId !== null) {
       setEntries((prev) =>
@@ -476,8 +490,8 @@ export default function MBookApp() {
           return {
             ...entry,
             type: form.entryType,
-            service: form.entryType === "work" ? form.service : undefined,
-            customNote: form.entryType === "work" && form.service === "Other" ? form.customNote.trim() : undefined,
+            service: finalService,
+            customNote: finalCustomNote,
             customer: form.entryType === "work" ? form.customer.trim() : undefined,
             amount,
             status: form.entryType === "work" ? form.status : undefined,
@@ -493,8 +507,8 @@ export default function MBookApp() {
         id: Date.now(),
         entryCode: code,
         type: form.entryType,
-        service: form.entryType === "work" ? form.service : undefined,
-        customNote: form.entryType === "work" && form.service === "Other" ? form.customNote.trim() : undefined,
+        service: finalService,
+        customNote: finalCustomNote,
         customer: form.entryType === "work" ? form.customer.trim() : undefined,
         amount,
         status: form.entryType === "work" ? form.status : undefined,
@@ -507,7 +521,7 @@ export default function MBookApp() {
       setNextEntryNum((n) => n + 1);
     }
     closeForm();
-  }, [closeForm, editingId, form, generateEntryCode]);
+  }, [closeForm, editingId, form, generateEntryCode, normalizeService]);
 
   const deleteEntry = useCallback(
     (id: number) => {
@@ -521,7 +535,7 @@ export default function MBookApp() {
       setEditingId(entry.id);
       setForm({
         entryType: entry.type,
-        service: entry.service || services[0] || "Other",
+        service: normalizeService(entry.service),
         customNote: entry.customNote || "",
         customer: entry.customer || "",
         amount: String(entry.amount || ""),
@@ -532,7 +546,7 @@ export default function MBookApp() {
       });
       setShowForm(true);
     },
-    [services]
+    [normalizeService]
   );
 
   const inputClass = "w-full rounded-2xl border border-[#2A2D35] bg-[#0D0F14] p-4 text-sm text-[#F5F5F7] outline-none focus:border-[#E8C468] transition-colors";
@@ -943,7 +957,7 @@ export default function MBookApp() {
                   <div className="space-y-4">
                     {form.entryType === "work" ? (
                       <>
-                        <select value={form.service} onChange={(e) => setForm((f) => ({ ...f, service: e.target.value }))} className={inputClass}>
+                        <select value={form.service || services[0] || "Other"} onChange={(e) => setForm((f) => ({ ...f, service: e.target.value }))} className={inputClass}>
                           {services.map((s) => (
                             <option key={s} value={s}>
                               {s}
