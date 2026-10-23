@@ -70,6 +70,12 @@ interface EntryForm {
   photo?: string;
 }
 
+interface FormErrors {
+  service?: string;
+  customer?: string;
+  amount?: string;
+}
+
 const TRANSLATIONS = {
   en: {
     home: "Home",
@@ -178,7 +184,7 @@ const TRANSLATIONS = {
     import: "डेटा इम्पोर्ट करें",
     clearAll: "सभी रिकॉर्ड मिटाएं",
     deleteConfirm: "क्या आप इस रिकॉर्ड को मिटाना चाहते हैं?",
-    clearConfirm: "सभी डेटा मिटाएं? इसे वापस नहीं लाया जा सकता।",
+    clearConfirm: "सभी डेटा मिटाएं? इसे व���पस नहीं लाया जा सकता।",
     noPhoto: "कोई फोटो नहीं है",
     entryCode: "एंट्री कोड",
     all: "सभी",
@@ -331,6 +337,7 @@ export default function MBookApp() {
   const [showManageServices, setShowManageServices] = useState(false);
   const [newServiceName, setNewServiceName] = useState("");
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
 
   const t = TRANSLATIONS[lang];
 
@@ -350,7 +357,6 @@ export default function MBookApp() {
     }
   });
 
-  // Debounced localStorage saves to prevent excessive writes
   useEffect(() => {
     const timer = setTimeout(() => {
       localStorage.setItem("mbook_entries", JSON.stringify(entries));
@@ -413,6 +419,26 @@ export default function MBookApp() {
     return code;
   }, [nextEntryNum]);
 
+  const validateWorkForm = useCallback(() => {
+    const errors: FormErrors = {};
+    const amountValue = Number(form.amount);
+
+    if (!form.service?.trim()) {
+      errors.service = "Please select a service.";
+    }
+
+    if (!form.customer.trim()) {
+      errors.customer = "Customer name is required.";
+    }
+
+    if (!form.amount || Number.isNaN(amountValue) || amountValue <= 0) {
+      errors.amount = "Amount must be greater than 0.";
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  }, [form.amount, form.customer, form.service]);
+
   const openNewForm = useCallback(
     (photo?: string) => {
       setEditingId(null);
@@ -420,6 +446,7 @@ export default function MBookApp() {
       f.service = services[0] || "Other";
       f.photo = photo;
       setForm(f);
+      setFormErrors({});
       setShowForm(true);
     },
     [services]
@@ -429,6 +456,7 @@ export default function MBookApp() {
     setShowForm(false);
     setEditingId(null);
     setForm(emptyForm());
+    setFormErrors({});
     setCameraPreview(null);
   }, []);
 
@@ -436,7 +464,6 @@ export default function MBookApp() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Use requestIdleCallback to not block UI thread
     requestIdleCallback(() => {
       const reader = new FileReader();
       reader.onload = () => {
@@ -454,6 +481,10 @@ export default function MBookApp() {
   }, [cameraPreview, openNewForm]);
 
   const saveEntry = useCallback(() => {
+    if (form.entryType === "work" && !validateWorkForm()) {
+      return;
+    }
+
     const isUndecided = form.entryType === "work" && form.status === "undecided";
     const amount = isUndecided ? 0 : parseFloat(form.amount) || 0;
 
@@ -495,7 +526,7 @@ export default function MBookApp() {
       setNextEntryNum((n) => n + 1);
     }
     closeForm();
-  }, [editingId, form, generateEntryCode, closeForm]);
+  }, [closeForm, editingId, form, generateEntryCode, validateWorkForm]);
 
   const deleteEntry = useCallback(
     (id: number) => {
@@ -518,6 +549,7 @@ export default function MBookApp() {
         note: entry.note || "",
         photo: entry.photo,
       });
+      setFormErrors({});
       setShowForm(true);
     },
     [services]
@@ -739,14 +771,14 @@ export default function MBookApp() {
                     </button>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center justify-between p-4 border-t border-[#2A2D35]">
                   <span className="text-sm font-bold">{t.darkAppearance}</span>
-                  <button 
+                  <button
                     onClick={toggleTheme}
-                    className={`w-12 h-6 rounded-full p-1 transition-colors ${theme === 'dark' ? 'bg-[#E8C468]' : 'bg-[#2A2D35]'}`}
+                    className={`w-12 h-6 rounded-full p-1 transition-colors ${theme === "dark" ? "bg-[#E8C468]" : "bg-[#2A2D35]"}`}
                   >
-                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${theme === 'dark' ? 'translate-x-6' : 'translate-x-0'}`} />
+                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${theme === "dark" ? "translate-x-6" : "translate-x-0"}`} />
                   </button>
                 </div>
               </div>
@@ -811,7 +843,6 @@ export default function MBookApp() {
                     </button>
                   </div>
 
-                  {/* Photo Display Section */}
                   <div className="rounded-2xl border border-[#2A2D35] bg-[#0D0F14] p-4 overflow-hidden">
                     {form.photo ? (
                       <div className="relative group">
@@ -836,7 +867,7 @@ export default function MBookApp() {
                     ) : (
                       <button
                         onClick={() => photoInputRef.current?.click()}
-                        className="w-full h-32 flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-[#2A2D35] hover:border-[#E8C468] hover:bg-[#E8C468]/5 transition-all"
+                        className="w-full h-32 flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-[#2A2D35] hover:border-[#E8C468] hover:bg-[#E8C468]/5 transition-colors"
                       >
                         <ImagePlus size={32} className="text-[#8B8F99] group-hover:text-[#E8C468]" />
                         <span className="text-sm font-bold text-[#8B8F99]">{t.capture}</span>
@@ -877,13 +908,23 @@ export default function MBookApp() {
                   <div className="space-y-4">
                     {form.entryType === "work" ? (
                       <>
-                        <select value={form.service} onChange={(e) => setForm((f) => ({ ...f, service: e.target.value }))} className={inputClass}>
-                          {services.map((s) => (
-                            <option key={s} value={s}>
-                              {s}
-                            </option>
-                          ))}
-                        </select>
+                        <div>
+                          <select
+                            value={form.service}
+                            onChange={(e) => {
+                              setForm((f) => ({ ...f, service: e.target.value }));
+                              setFormErrors((prev) => ({ ...prev, service: undefined }));
+                            }}
+                            className={`${inputClass} ${formErrors.service ? "border-red-500" : ""}`}
+                          >
+                            {services.map((s) => (
+                              <option key={s} value={s}>
+                                {s}
+                              </option>
+                            ))}
+                          </select>
+                          {formErrors.service && <p className="mt-1 text-xs text-red-400">{formErrors.service}</p>}
+                        </div>
                         {form.service === "Other" && (
                           <input
                             value={form.customNote}
@@ -892,12 +933,18 @@ export default function MBookApp() {
                             className={inputClass}
                           />
                         )}
-                        <input
-                          value={form.customer}
-                          onChange={(e) => setForm((f) => ({ ...f, customer: e.target.value }))}
-                          placeholder={t.customer}
-                          className={inputClass}
-                        />
+                        <div>
+                          <input
+                            value={form.customer}
+                            onChange={(e) => {
+                              setForm((f) => ({ ...f, customer: e.target.value }));
+                              setFormErrors((prev) => ({ ...prev, customer: undefined }));
+                            }}
+                            placeholder={t.customer}
+                            className={`${inputClass} ${formErrors.customer ? "border-red-500" : ""}`}
+                          />
+                          {formErrors.customer && <p className="mt-1 text-xs text-red-400">{formErrors.customer}</p>}
+                        </div>
                         <div>
                           <p className="mb-2 ml-1 text-[10px] font-black uppercase tracking-widest text-[#8B8F99]">{t.status}</p>
                           <div className="flex gap-2">
@@ -922,9 +969,13 @@ export default function MBookApp() {
                             type="number"
                             value={form.status === "undecided" ? "0" : form.amount}
                             disabled={form.status === "undecided"}
-                            onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-                            className={inputClass}
+                            onChange={(e) => {
+                              setForm((f) => ({ ...f, amount: e.target.value }));
+                              setFormErrors((prev) => ({ ...prev, amount: undefined }));
+                            }}
+                            className={`${inputClass} ${formErrors.amount ? "border-red-500" : ""}`}
                           />
+                          {formErrors.amount && <p className="mt-1 text-xs text-red-400">{formErrors.amount}</p>}
                           {form.status === "undecided" && <p className="ml-1 mt-1 text-[11px] text-[#8B8F99]">{t.undecidedHelp}</p>}
                         </div>
                         {form.status === "paid" && (
