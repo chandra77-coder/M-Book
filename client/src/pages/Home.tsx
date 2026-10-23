@@ -15,21 +15,16 @@ import {
   X,
   Camera,
   Eye,
-  Languages,
   Check,
   RotateCcw,
   ImagePlus,
 } from "lucide-react";
 import { EntryCard, HistoryEntryCard } from "@/components/EntryCard";
 import {
-  WEEKDAYS,
   GOLD_GRADIENT,
   daysAgoFrom,
-  formatDate,
-  formatTime,
   inr,
   calculateStats,
-  debounce,
 } from "@/utils/helpers";
 
 type EntryType = "work" | "spend" | "transfer";
@@ -68,12 +63,6 @@ interface EntryForm {
   method: PaymentMethod;
   note: string;
   photo?: string;
-}
-
-interface FormErrors {
-  service?: string;
-  customer?: string;
-  amount?: string;
 }
 
 const TRANSLATIONS = {
@@ -184,7 +173,7 @@ const TRANSLATIONS = {
     import: "डेटा इम्पोर्ट करें",
     clearAll: "सभी रिकॉर्ड मिटाएं",
     deleteConfirm: "क्या आप इस रिकॉर्ड को मिटाना चाहते हैं?",
-    clearConfirm: "सभी डेटा मिटाएं? इसे व���पस नहीं लाया जा सकता।",
+    clearConfirm: "सभी डेटा मिटाएं? इसे वापस नहीं लाया जा सकता।",
     noPhoto: "कोई फोटो नहीं है",
     entryCode: "एंट्री कोड",
     all: "सभी",
@@ -229,86 +218,79 @@ function emptyForm(): EntryForm {
   };
 }
 
-// Memoized subcomponents to prevent unnecessary re-renders
-const StatsCard = React.memo(
-  ({ totalBalance, income, expense, unpaid, t }: any) => (
-    <div className="rounded-[2.5rem] border border-[#2A2D35] bg-[#181B22] p-8 shadow-2xl relative overflow-hidden">
-      <div className="absolute top-0 right-0 w-32 h-32 bg-[#E8C468]/5 rounded-full -mr-16 -mt-16 blur-3xl" />
-      <p className="text-xs font-black uppercase tracking-widest text-[#8B8F99]">{t.totalBalance}</p>
-      <h3 className="mb-6 mt-1 font-display text-4xl font-extrabold text-transparent bg-clip-text" style={{ backgroundImage: GOLD_GRADIENT }}>
-        {inr(totalBalance)}
-      </h3>
-      <div className="grid grid-cols-3 gap-3">
-        <div>
-          <p className="text-[10px] font-black uppercase text-[#8B8F99]">{t.income}</p>
-          <p className="font-bold text-[#4ADE80]">{inr(income)}</p>
-        </div>
-        <div>
-          <p className="text-[10px] font-black uppercase text-[#8B8F99]">{t.expense}</p>
-          <p className="font-bold text-[#F87171]">{inr(expense)}</p>
-        </div>
-        <div>
-          <p className="text-[10px] font-black uppercase text-[#8B8F99]">{t.unpaid}</p>
-          <p className="font-bold text-[#E8C468]">{inr(unpaid)}</p>
-        </div>
+const StatsCard = React.memo(({ totalBalance, income, expense, unpaid, t }: any) => (
+  <div className="rounded-[2.5rem] border border-[#2A2D35] bg-[#181B22] p-8 shadow-2xl relative overflow-hidden">
+    <div className="absolute top-0 right-0 w-32 h-32 bg-[#E8C468]/5 rounded-full -mr-16 -mt-16 blur-3xl" />
+    <p className="text-xs font-black uppercase tracking-widest text-[#8B8F99]">{t.totalBalance}</p>
+    <h3 className="mb-6 mt-1 font-display text-4xl font-extrabold text-transparent bg-clip-text" style={{ backgroundImage: GOLD_GRADIENT }}>
+      {inr(totalBalance)}
+    </h3>
+    <div className="grid grid-cols-3 gap-3">
+      <div>
+        <p className="text-[10px] font-black uppercase text-[#8B8F99]">{t.income}</p>
+        <p className="font-bold text-[#4ADE80]">{inr(income)}</p>
+      </div>
+      <div>
+        <p className="text-[10px] font-black uppercase text-[#8B8F99]">{t.expense}</p>
+        <p className="font-bold text-[#F87171]">{inr(expense)}</p>
+      </div>
+      <div>
+        <p className="text-[10px] font-black uppercase text-[#8B8F99]">{t.unpaid}</p>
+        <p className="font-bold text-[#E8C468]">{inr(unpaid)}</p>
       </div>
     </div>
-  )
-);
+  </div>
+));
 StatsCard.displayName = "StatsCard";
 
-const PaymentMethodsSection = React.memo(
-  ({ cashPayments, onlinePayments, t }: any) => (
-    <div className="rounded-3xl border border-[#2A2D35] bg-[#181B22] p-6 space-y-4">
-      <h3 className="font-bold text-lg">{t.paymentModes}</h3>
-      <div className="space-y-3">
-        <div className="flex items-center justify-between p-4 rounded-2xl bg-[#0D0F14]">
-          <div className="flex items-center gap-3">
-            <div className="w-3 h-3 rounded-full" style={{ background: "#4ADE80" }}></div>
-            <span className="text-sm font-medium">{t.cash}</span>
-          </div>
-          <span className="font-bold text-[#4ADE80]">{inr(cashPayments)}</span>
+const PaymentMethodsSection = React.memo(({ cashPayments, onlinePayments, t }: any) => (
+  <div className="rounded-3xl border border-[#2A2D35] bg-[#181B22] p-6 space-y-4">
+    <h3 className="font-bold text-lg">{t.paymentModes}</h3>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between p-4 rounded-2xl bg-[#0D0F14]">
+        <div className="flex items-center gap-3">
+          <div className="w-3 h-3 rounded-full" style={{ background: "#4ADE80" }}></div>
+          <span className="text-sm font-medium">{t.cash}</span>
         </div>
-        <div className="flex items-center justify-between p-4 rounded-2xl bg-[#0D0F14]">
-          <div className="flex items-center gap-3">
-            <div className="w-3 h-3 rounded-full" style={{ background: "#60A5FA" }}></div>
-            <span className="text-sm font-medium">{t.online}</span>
-          </div>
-          <span className="font-bold text-[#60A5FA]">{inr(onlinePayments)}</span>
+        <span className="font-bold text-[#4ADE80]">{inr(cashPayments)}</span>
+      </div>
+      <div className="flex items-center justify-between p-4 rounded-2xl bg-[#0D0F14]">
+        <div className="flex items-center gap-3">
+          <div className="w-3 h-3 rounded-full" style={{ background: "#60A5FA" }}></div>
+          <span className="text-sm font-medium">{t.online}</span>
         </div>
+        <span className="font-bold text-[#60A5FA]">{inr(onlinePayments)}</span>
       </div>
     </div>
-  )
-);
+  </div>
+));
 PaymentMethodsSection.displayName = "PaymentMethodsSection";
 
-const ServiceEarningsSection = React.memo(
-  ({ serviceEarnings, totalEarned, t }: any) => (
-    <div className="rounded-3xl border border-[#2A2D35] bg-[#181B22] p-6 space-y-4">
-      <h3 className="font-bold text-lg">{t.servicesShare}</h3>
-      {serviceEarnings.length > 0 ? (
-        <div className="space-y-3">
-          {serviceEarnings.map(([service, amount]: any) => {
-            const percentage = totalEarned > 0 ? (amount / totalEarned) * 100 : 0;
-            return (
-              <div key={service} className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium truncate">{service}</span>
-                  <span className="font-bold text-[#E8C468]">{inr(amount)}</span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-[#0D0F14] overflow-hidden">
-                  <div className="h-full" style={{ width: `${percentage}%`, background: GOLD_GRADIENT }}></div>
-                </div>
+const ServiceEarningsSection = React.memo(({ serviceEarnings, totalEarned, t }: any) => (
+  <div className="rounded-3xl border border-[#2A2D35] bg-[#181B22] p-6 space-y-4">
+    <h3 className="font-bold text-lg">{t.servicesShare}</h3>
+    {serviceEarnings.length > 0 ? (
+      <div className="space-y-3">
+        {serviceEarnings.map(([service, amount]: any) => {
+          const percentage = totalEarned > 0 ? (amount / totalEarned) * 100 : 0;
+          return (
+            <div key={service} className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium truncate">{service}</span>
+                <span className="font-bold text-[#E8C468]">{inr(amount)}</span>
               </div>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="text-[#8B8F99] text-sm">{t.noServices}</p>
-      )}
-    </div>
-  )
-);
+              <div className="w-full h-2 rounded-full bg-[#0D0F14] overflow-hidden">
+                <div className="h-full" style={{ width: `${percentage}%`, background: GOLD_GRADIENT }}></div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    ) : (
+      <p className="text-[#8B8F99] text-sm">{t.noServices}</p>
+    )}
+  </div>
+));
 ServiceEarningsSection.displayName = "ServiceEarningsSection";
 
 export default function MBookApp() {
@@ -323,9 +305,10 @@ export default function MBookApp() {
   const [importText, setImportText] = useState("");
   const [qrAmount, setQrAmount] = useState("");
   const [qrCustomer, setQrCustomer] = useState("");
+  const [qrError, setQrError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
-  const [qrImage, setQrImage] = useState<string | null>(() => localStorage.getItem("mbook_qr") || "/payment-qr.jpg");
+  const [qrImage, setQrImage] = useState<string | null>(() => localStorage.getItem("mbook_qr") || "./payment-qr.jpg");
   const [lang, setLang] = useState<Language>(() => (localStorage.getItem("mbook_lang") as Language) || "en");
   const [services, setServices] = useState<string[]>(() => {
     const saved = localStorage.getItem("mbook_services");
@@ -334,10 +317,7 @@ export default function MBookApp() {
   const [nextEntryNum, setNextEntryNum] = useState<number>(() => Number(localStorage.getItem("mbook_next_num") || 1));
   const [cameraPreview, setCameraPreview] = useState<string | null>(null);
   const [showPhotoViewer, setShowPhotoViewer] = useState<string | null>(null);
-  const [showManageServices, setShowManageServices] = useState(false);
-  const [newServiceName, setNewServiceName] = useState("");
   const photoInputRef = useRef<HTMLInputElement>(null);
-  const [formErrors, setFormErrors] = useState<FormErrors>({});
 
   const t = TRANSLATIONS[lang];
 
@@ -360,8 +340,14 @@ export default function MBookApp() {
   useEffect(() => {
     const timer = setTimeout(() => {
       localStorage.setItem("mbook_entries", JSON.stringify(entries));
-    }, 1000);
+    }, 300);
     return () => clearTimeout(timer);
+  }, [entries]);
+
+  useEffect(() => {
+    const save = () => localStorage.setItem("mbook_entries", JSON.stringify(entries));
+    window.addEventListener("beforeunload", save);
+    return () => window.removeEventListener("beforeunload", save);
   }, [entries]);
 
   useEffect(() => {
@@ -388,7 +374,6 @@ export default function MBookApp() {
   const workEntries = useMemo(() => entriesWithDaysAgo.filter((e) => e.type === "work"), [entriesWithDaysAgo]);
   const spendEntries = useMemo(() => entriesWithDaysAgo.filter((e) => e.type === "spend"), [entriesWithDaysAgo]);
   const transferEntries = useMemo(() => entriesWithDaysAgo.filter((e) => e.type === "transfer"), [entriesWithDaysAgo]);
-  const photoEntries = useMemo(() => workEntries.filter((e) => e.photo), [workEntries]);
 
   const stats = useMemo(() => calculateStats(workEntries, spendEntries, transferEntries), [workEntries, spendEntries, transferEntries]);
 
@@ -419,26 +404,6 @@ export default function MBookApp() {
     return code;
   }, [nextEntryNum]);
 
-  const validateWorkForm = useCallback(() => {
-    const errors: FormErrors = {};
-    const amountValue = Number(form.amount);
-
-    if (!form.service?.trim()) {
-      errors.service = "Please select a service.";
-    }
-
-    if (!form.customer.trim()) {
-      errors.customer = "Customer name is required.";
-    }
-
-    if (!form.amount || Number.isNaN(amountValue) || amountValue <= 0) {
-      errors.amount = "Amount must be greater than 0.";
-    }
-
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  }, [form.amount, form.customer, form.service]);
-
   const openNewForm = useCallback(
     (photo?: string) => {
       setEditingId(null);
@@ -446,7 +411,6 @@ export default function MBookApp() {
       f.service = services[0] || "Other";
       f.photo = photo;
       setForm(f);
-      setFormErrors({});
       setShowForm(true);
     },
     [services]
@@ -456,7 +420,6 @@ export default function MBookApp() {
     setShowForm(false);
     setEditingId(null);
     setForm(emptyForm());
-    setFormErrors({});
     setCameraPreview(null);
   }, []);
 
@@ -481,7 +444,25 @@ export default function MBookApp() {
   }, [cameraPreview, openNewForm]);
 
   const saveEntry = useCallback(() => {
-    if (form.entryType === "work" && !validateWorkForm()) {
+    if (form.entryType === "work") {
+      if (form.customer.trim() === "") {
+        alert("Customer name is required");
+        return;
+      }
+      if (form.service.trim() === "") {
+        alert("Please select a service");
+        return;
+      }
+      if (form.status === "paid" || form.status === "unpaid") {
+        if (parseFloat(form.amount) <= 0) {
+          alert("Amount must be greater than 0");
+          return;
+        }
+      }
+    }
+
+    if ((form.entryType === "spend" || form.entryType === "transfer") && parseFloat(form.amount) <= 0) {
+      alert("Amount must be greater than 0");
       return;
     }
 
@@ -526,7 +507,7 @@ export default function MBookApp() {
       setNextEntryNum((n) => n + 1);
     }
     closeForm();
-  }, [closeForm, editingId, form, generateEntryCode, validateWorkForm]);
+  }, [closeForm, editingId, form, generateEntryCode]);
 
   const deleteEntry = useCallback(
     (id: number) => {
@@ -549,7 +530,6 @@ export default function MBookApp() {
         note: entry.note || "",
         photo: entry.photo,
       });
-      setFormErrors({});
       setShowForm(true);
     },
     [services]
@@ -707,9 +687,11 @@ export default function MBookApp() {
                     onChange={(e) => setQrAmount(e.target.value)}
                     className={`${inputClass} font-display text-xl font-bold`}
                   />
+                  {qrError && <p className="text-xs text-red-400">{qrError}</p>}
                   <button
                     onClick={() => {
-                      if (qrAmount && qrCustomer) {
+                      if (qrCustomer.trim() && parseFloat(qrAmount) > 0) {
+                        setQrError("");
                         const newEntry: Entry = {
                           id: Date.now(),
                           entryCode: generateEntryCode(),
@@ -727,6 +709,8 @@ export default function MBookApp() {
                         setQrAmount("");
                         setQrCustomer("");
                         alert(lang === "en" ? "Payment logged successfully!" : "भुगतान सफलतापूर्वक लॉग किया गया!");
+                      } else {
+                        setQrError("Please enter a valid customer name and amount greater than 0");
                       }
                     }}
                     className="w-full rounded-2xl py-4 font-black uppercase tracking-widest text-[#0D0F14] shadow-xl active:scale-95 transition-transform"
@@ -746,7 +730,7 @@ export default function MBookApp() {
               </div>
 
               <div className="flex items-center gap-4 mb-2">
-                <img src="/mbook-logo.png" alt="M-Book Logo" className="w-16 h-16 rounded-2xl border border-[#2A2D35]" />
+                <img src="./mbook-logo.png" alt="M-Book Logo" className="w-16 h-16 rounded-2xl border border-[#2A2D35]" />
                 <div>
                   <h1 className="font-display text-2xl font-extrabold tracking-tight">M-Book</h1>
                   <p className="text-[10px] font-black uppercase tracking-widest text-[#8B8F99]">Premium Work Ledger</p>
@@ -781,6 +765,57 @@ export default function MBookApp() {
                     <div className={`w-4 h-4 rounded-full bg-white transition-transform ${theme === "dark" ? "translate-x-6" : "translate-x-0"}`} />
                   </button>
                 </div>
+              </div>
+
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const blob = new Blob([JSON.stringify({ entries, nextEntryNum })], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = "mbook-backup.json";
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="flex w-full items-center justify-center gap-3 rounded-3xl border border-[#2A2D35] bg-[#181B22] p-4 text-sm font-bold text-[#F5F5F7] hover:bg-[#1F2229] transition-colors"
+                >
+                  <Upload size={18} /> {t.export}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex w-full items-center justify-center gap-3 rounded-3xl border border-[#2A2D35] bg-[#181B22] p-4 text-sm font-bold text-[#F5F5F7] hover:bg-[#1F2229] transition-colors"
+                >
+                  <Upload size={18} /> {t.import}
+                </button>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      try {
+                        const data = JSON.parse(reader.result as string);
+                        if (data.entries) {
+                          setEntries(data.entries);
+                          setNextEntryNum(data.nextEntryNum || data.entries.length + 1);
+                          alert("Backup restored!");
+                        }
+                      } catch {
+                        alert("Invalid backup file");
+                      }
+                    };
+                    reader.readAsText(file);
+                  }}
+                />
               </div>
 
               <button
@@ -869,7 +904,7 @@ export default function MBookApp() {
                         onClick={() => photoInputRef.current?.click()}
                         className="w-full h-32 flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-[#2A2D35] hover:border-[#E8C468] hover:bg-[#E8C468]/5 transition-colors"
                       >
-                        <ImagePlus size={32} className="text-[#8B8F99] group-hover:text-[#E8C468]" />
+                        <ImagePlus size={32} className="text-[#8B8F99]" />
                         <span className="text-sm font-bold text-[#8B8F99]">{t.capture}</span>
                       </button>
                     )}
@@ -908,23 +943,13 @@ export default function MBookApp() {
                   <div className="space-y-4">
                     {form.entryType === "work" ? (
                       <>
-                        <div>
-                          <select
-                            value={form.service}
-                            onChange={(e) => {
-                              setForm((f) => ({ ...f, service: e.target.value }));
-                              setFormErrors((prev) => ({ ...prev, service: undefined }));
-                            }}
-                            className={`${inputClass} ${formErrors.service ? "border-red-500" : ""}`}
-                          >
-                            {services.map((s) => (
-                              <option key={s} value={s}>
-                                {s}
-                              </option>
-                            ))}
-                          </select>
-                          {formErrors.service && <p className="mt-1 text-xs text-red-400">{formErrors.service}</p>}
-                        </div>
+                        <select value={form.service} onChange={(e) => setForm((f) => ({ ...f, service: e.target.value }))} className={inputClass}>
+                          {services.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </select>
                         {form.service === "Other" && (
                           <input
                             value={form.customNote}
@@ -933,18 +958,12 @@ export default function MBookApp() {
                             className={inputClass}
                           />
                         )}
-                        <div>
-                          <input
-                            value={form.customer}
-                            onChange={(e) => {
-                              setForm((f) => ({ ...f, customer: e.target.value }));
-                              setFormErrors((prev) => ({ ...prev, customer: undefined }));
-                            }}
-                            placeholder={t.customer}
-                            className={`${inputClass} ${formErrors.customer ? "border-red-500" : ""}`}
-                          />
-                          {formErrors.customer && <p className="mt-1 text-xs text-red-400">{formErrors.customer}</p>}
-                        </div>
+                        <input
+                          value={form.customer}
+                          onChange={(e) => setForm((f) => ({ ...f, customer: e.target.value }))}
+                          placeholder={t.customer}
+                          className={inputClass}
+                        />
                         <div>
                           <p className="mb-2 ml-1 text-[10px] font-black uppercase tracking-widest text-[#8B8F99]">{t.status}</p>
                           <div className="flex gap-2">
@@ -969,13 +988,9 @@ export default function MBookApp() {
                             type="number"
                             value={form.status === "undecided" ? "0" : form.amount}
                             disabled={form.status === "undecided"}
-                            onChange={(e) => {
-                              setForm((f) => ({ ...f, amount: e.target.value }));
-                              setFormErrors((prev) => ({ ...prev, amount: undefined }));
-                            }}
-                            className={`${inputClass} ${formErrors.amount ? "border-red-500" : ""}`}
+                            onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+                            className={inputClass}
                           />
-                          {formErrors.amount && <p className="mt-1 text-xs text-red-400">{formErrors.amount}</p>}
                           {form.status === "undecided" && <p className="ml-1 mt-1 text-[11px] text-[#8B8F99]">{t.undecidedHelp}</p>}
                         </div>
                         {form.status === "paid" && (

@@ -1,4 +1,3 @@
-import { cn } from "@/lib/utils";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 import { Component, ReactNode } from "react";
 
@@ -24,28 +23,18 @@ class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex items-center justify-center min-h-screen p-8 bg-background">
-          <div className="flex flex-col items-center w-full max-w-2xl p-8">
-            <AlertTriangle
-              size={48}
-              className="text-destructive mb-6 flex-shrink-0"
-            />
-
-            <h2 className="text-xl mb-4">An unexpected error occurred.</h2>
-
-            <div className="p-4 w-full rounded bg-muted overflow-auto mb-6">
-              <pre className="text-sm text-muted-foreground whitespace-break-spaces">
-                {this.state.error?.stack}
+        <div className="flex min-h-screen items-center justify-center bg-[#0D0F14] p-8 text-[#F5F5F7]">
+          <div className="flex w-full max-w-lg flex-col items-center rounded-3xl border border-[#2A2D35] bg-[#181B22] p-8 text-center shadow-2xl">
+            <AlertTriangle size={44} className="mb-4 text-[#F87171]" />
+            <h2 className="text-xl font-bold">Something went wrong. Please reload the app.</h2>
+            {import.meta.env.DEV && this.state.error && (
+              <pre className="mt-4 max-h-40 w-full overflow-auto rounded-2xl bg-[#0D0F14] p-3 text-left text-xs text-[#8B8F99]">
+                {this.state.error.stack}
               </pre>
-            </div>
-
+            )}
             <button
               onClick={() => window.location.reload()}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg",
-                "bg-primary text-primary-foreground",
-                "hover:opacity-90 cursor-pointer"
-              )}
+              className="mt-6 flex items-center gap-2 rounded-2xl bg-[#E8C468] px-5 py-3 font-bold text-[#0D0F14] transition hover:opacity-90"
             >
               <RotateCcw size={16} />
               Reload Page
